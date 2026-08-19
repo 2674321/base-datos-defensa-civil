@@ -14,6 +14,7 @@ var App = (function () {
   var cache = {};
   var PROYECTO_VERSION = '0.8.4';
   var ultimoTotalAlertas = null;
+  var _barraCarga = null;
 
   var TITULOS = {
     dashboard: 'Panel de control',
@@ -281,9 +282,17 @@ var App = (function () {
     }
   }
 
+  var _splashInicio = Date.now();
+  var SPLASH_MIN_MS = 1200;
   function ocultarSplash() {
     var sp = document.getElementById('splash');
     if (!sp || sp.classList.contains('saliendo')) return;
+    var elapsed = Date.now() - _splashInicio;
+    var restante = SPLASH_MIN_MS - elapsed;
+    if (restante > 0) {
+      setTimeout(function () { ocultarSplash(); }, restante);
+      return;
+    }
     sp.classList.add('saliendo');
     setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 320);
   }
@@ -436,6 +445,7 @@ var App = (function () {
     }
     var paginas = document.querySelectorAll('.page');
     var aplicar = function () {
+      if (_barraCarga) { _barraCarga.style.width = '100%'; }
       for (var j = 0; j < paginas.length; j++) {
         var esActiva = paginas[j].id === 'page-' + nombre;
         paginas[j].classList.remove('saliendo');
@@ -456,9 +466,6 @@ var App = (function () {
           console.error('Error en página ' + nombre, err);
           cont.innerHTML = App.alerta('critica', '<strong>Error al cargar la página.</strong> ' + App.h(err && err.message ? err.message : err));
         }
-        // V3.4A: microentradas escalonadas UNA sola vez por sesión (KPIs, actividad,
-        // barras). La clase vista-nueva se retira tras 700 ms; las siguientes
-        // visitas a la página no re-animan.
         if (!cont.__v34Vista) {
           cont.__v34Vista = true;
           cont.classList.add('vista-nueva');
@@ -466,6 +473,7 @@ var App = (function () {
         }
       }
       window.scrollTo(0, 0);
+      setTimeout(function () { if (_barraCarga) { _barraCarga.style.width = '0'; } }, 100);
     };
     var vieja = null;
     for (var k = 0; k < paginas.length; k++) {
@@ -473,6 +481,7 @@ var App = (function () {
     }
     var reducido = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (vieja && !reducido) {
+      if (_barraCarga) { _barraCarga.style.width = '60%'; _barraCarga.style.transition = 'width 150ms ease-out'; }
       vieja.classList.add('saliendo');
       setTimeout(aplicar, 150);
     } else {
@@ -547,6 +556,10 @@ var App = (function () {
 
     var logos = document.querySelectorAll('.logo-institucional');
     for (var li = 0; li < logos.length; li++) { logos[li].src = LOGO; }
+
+    _barraCarga = document.createElement('div');
+    _barraCarga.style.cssText = 'position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--dc-azul-500,#004C90),var(--dc-celeste-500,#0B92E0));z-index:10000;transition:width 200ms ease-out;pointer-events:none;';
+    document.body.appendChild(_barraCarga);
 
     var items = document.querySelectorAll('.nav-item[data-ruta]');
     for (var i = 0; i < items.length; i++) {
