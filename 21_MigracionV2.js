@@ -336,7 +336,10 @@ function crearEstructuraV2() {
     _registrarEsquemaV2();
     var sinc = _sincronizarCatalogosV2(ss);
     var rep = _repararCatalogosV2(ss);
-    var mig34 = _migrarV34D(ss);
+    // V3.4J: la migración V3.4D quedó comentada como historial en 38_Migraciones.js
+    // (reordenamiento V3.4H) y ya se aplicó en producción — se devuelve el resultado
+    // vacío para conservar el contrato del log/retorno sin referenciar código eliminado.
+    var mig34 = { creados: [], omitidos: [], detalles: [] };
     _log(ss, 'Sistema', 'crearEstructuraV2', 'OK', 'esquema ' + ESQUEMA_V2 + ' — ' + creadas.length + ' hojas, semillas: ' + (sembradas.length ? sembradas.join(', ') : 'ninguna') + (migradas.length ? '; columnas V3.3: ' + migradas.join(', ') : '') + (sinc.resumen !== 'sin cambios' ? '; V3.1: ' + sinc.resumen : '') + (rep.resumen ? '; reparación V3.2: ' + rep.resumen : '') + (mig34.creados.length ? '; V3.4D: ' + mig34.creados.join(' | ') : ''));
     return _resOk({ esquema: ESQUEMA_V2, hojas: creadas.length, sembradas: sembradas, migradasV33: migradas, sincronizacionV31: sinc, reparacion: rep, migracionesV34D: mig34 });
   } finally {
