@@ -1,0 +1,98 @@
+<script>/* ============ PÁGINA: LICENCIAS (V3.4C, solo lectura) ============
+   Vista enfocada de las credenciales de tipo licencia ("Licencia de X").
+   V3.4H: el catálogo es la PLANTA de tipos — Licencia | Organismo | Estado
+   (Activo/Inactivo). Los datos de cada licencia (N°, vigencia, nivel, modelos)
+   viven en la asignación al voluntario (ver Credenciales → Por voluntario).
+   Sin backend nuevo: filtra listarCredencialesV2 por nombre (tipo = nombre
+   de la credencial, catálogo extensible en TIPOS_LICENCIA). */
+
+var LicenciasModule = (function () {
+  'use strict';
+  var cont = null;
+  var todas = [];
+  var consulta = '';
+
+  function cargar() {
+    App.pedir('listarCredencialesV2').then(function (res) {
+      todas = (res || []).filter(function (c) { return /^licencia/i.test(c.nombre); });
+      render();
+    }).catch(function (err) {
+      cont.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las licencias.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function kpi(iconoNombre, clase, numero, label) {
+    return '<div class="stat-card">' +
+      '<div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
+      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
+      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Licencias</h1>' +
+      '<p class="page-sub">Tipos de licencia del catálogo por organismo emisor (Radioaficionado, RPAS, Clase F y futuras)</p></div>';
+    cont.appendChild(cabecera);
+
+    var activas = todas.filter(function (c) { return c.estado === 'Activo'; }).length;
+    var inactivas = todas.filter(function (c) { return c.estado === 'Inactivo'; }).length;
+
+    var kpis = document.createElement('div');
+    kpis.className = 'rejilla-kpi';
+    kpis.innerHTML =
+      kpi('documento', 'azul', todas.length, 'Tipos de licencia') +
+      kpi('check', 'verde', activas, 'Activas') +
+      kpi('alerta', 'gris', inactivas, 'Inactivas');
+    cont.appendChild(kpis);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    cont.appendChild(card);
+    card.innerHTML =
+      '<div class="card-cabecera"><strong>Registro de tipos de licencia</strong>' +
+      '<input class="entrada" id="lic-buscar" placeholder="Buscar licencia u organismo…" style="max-width:240px"></div>' +
+      '<div class="card-cuerpo sin-pad"><div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>Licencia</th><th>Organismo</th><th>Estado</th>' +
+      '</tr></thead><tbody>' +
+      pintarFilas() +
+      '</tbody></table></div></div>';
+
+    var input = document.getElementById('lic-buscar');
+    input.addEventListener('input', function () {
+      consulta = input.value.trim().toLowerCase();
+      var cuerpo = card.querySelector('tbody');
+      cuerpo.innerHTML = pintarFilas();
+    });
+  }
+
+  function pintarFilas() {
+    var badgeEstado = { 'Activo': 'ok', 'Inactivo': 'gris' };
+    var filtradas = todas.filter(function (c) {
+      if (!consulta) return true;
+      return (c.nombre + ' ' + c.emisor).toLowerCase().indexOf(consulta) >= 0;
+    });
+    if (!filtradas.length) {
+      return '<tr><td colspan="3" class="texto-dim">Sin licencias' + (consulta ? ' para la búsqueda' : ' registradas') + '.</td></tr>';
+    }
+    return filtradas.map(function (c) {
+      return '<tr>' +
+        '<td class="fuerte">' + App.h(c.nombre) + '</td>' +
+        '<td>' + App.h(c.emisor || '—') + '</td>' +
+        '<td>' + App.badge(c.estado, badgeEstado[c.estado] || 'neutro') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 4);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('licencias', LicenciasModule);</script>
