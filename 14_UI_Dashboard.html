@@ -1,0 +1,420 @@
+<script>/* ============ PÁGINA PANEL DE CONTROL (V2 — FASE V3.4B) ============
+   Fuente única institucional: obtenerResumenDashboardV2 (voluntarios por
+   estado/categoría/grado/cargo/área + alertas + actividad). Bloques de
+   equipamiento (catálogo/inventario/entregas: única fuente física compartida
+   con V2) y servicios/asistencia: APIs V2 de lectura. Sin agregador v0. */
+
+var DashboardModule = (function () {
+  'use strict';
+
+  var cont = null;
+
+  var COLOR_ESTADOS_VOL = {
+    'Activo': '#2E7D4F', 'Inactivo': '#64748B', 'Suspendido': '#A6861A', 'Egresado': '#0B92E0'
+  };
+  var COLOR_CATEGORIAS = {
+    'Aspirante': '#A6861A', 'Disponible': '#0B92E0', 'Voluntario': '#2E7D4F', 'Reserva': '#6D5AA8'
+  };
+  var COLOR_ESTADOS_INV = {
+    'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B'
+  };
+
+  function kpi(iconoNombre, clase, numero, label) {
+    return '<div class="stat-card">' +
+      '<div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
+      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
+      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
+  }
+
+  function render(d) {
+    cont.innerHTML = '';
+    var v = d.voluntarios || {};
+    var cat = d.catalogo || {};
+    var inv = d.inventario || {};
+    var ent = d.entregas || {};
+    var srv = d.servicios || {};
+    var asi = d.asistencia || {};
+    var alertas = d.alertas || [];
+    var crit = d.resumenAlerta ? d.resumenAlerta.criticas : 0;
+
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Panel de control</h1>' +
+      '<p class="page-sub">Resumen general de la sede · ' + App.h(d.generado || '') + (d.version ? ' · v' + App.h(d.version) : '') + '</p></div>' +
+      '<div class="page-acciones">' +
+      '<button class="btn btn-primario" id="dash-nuevo-voluntario">' + App.icono('mas') + 'Nuevo voluntario</button>' +
+      '<button class="btn btn-secundario" id="dash-entrada-inventario">' + App.icono('inventario') + 'Entrada de inventario</button>' +
+      '</div>';
+    cont.appendChild(cabecera);
+
+    var kpis = document.createElement('div');
+    kpis.className = 'rejilla-kpi';
+    kpis.innerHTML =
+      kpi('voluntarios', 'verde', v.activos || 0, 'Voluntarios activos') +
+      kpi('voluntarios', 'azul', v.total || 0, 'Voluntarios registrados') +
+      kpi('servicios', 'celeste', srv.activos || 0, 'Servicios activos') +
+      kpi('asistencia', 'verde', asi.porcentajePresencia !== undefined ? asi.porcentajePresencia + '%' : '—', 'Presencia en asistencia') +
+      kpi('catalogo', 'azul', cat.activos || 0, 'Elementos catalogados') +
+      kpi('inventario', 'verde', inv.disponible || 0, 'Stock disponible') +
+      kpi('devolver', 'ambar', ent.pendientes || 0, 'Pendientes de devolución') +
+      kpi('alerta', crit > 0 ? 'rojo' : 'gris', alertas.length, 'Alertas');
+    cont.appendChild(kpis);
+
+    /* Fila: alertas + actividad */
+    var fila = document.createElement('div');
+    fila.className = 'rejilla-2';
+    fila.innerHTML = '<div class="card" id="dash-card-alertas"></div><div class="card" id="dash-card-actividad"></div>';
+    cont.appendChild(fila);
+
+    var cardAlertas = fila.querySelector('#dash-card-alertas');
+    cardAlertas.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Alertas</h2></div><div class="card-cuerpo" id="dash-alertas"></div>';
+    var cuerpoAlertas = cardAlertas.querySelector('#dash-alertas');
+    if (!alertas.length) {
+      cuerpoAlertas.innerHTML = App.alerta('ok', '<strong>Sin alertas.</strong> Todo en orden.');
+    } else {
+      var htmlA = '';
+      for (var i = 0; i < alertas.length; i++) {
+        htmlA += '<div style="margin-bottom:8px">' +
+          App.alerta(alertas[i].severidad === 'critica' ? 'critica' : 'aviso', App.h(alertas[i].texto)) + '</div>';
+      }
+      cuerpoAlertas.innerHTML = htmlA;
+    }
+
+    var cardAct = fila.querySelector('#dash-card-actividad');
+    cardAct.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Actividad reciente</h2>' +
+      '<button class="btn btn-ghost" id="dash-ver-historial">Ver historial</button></div>' +
+      '<div class="card-cuerpo" id="dash-actividad"></div>';
+    var cuerpoAct = cardAct.querySelector('#dash-actividad');
+    var act = d.actividadReciente || [];
+    if (!act.length) {
+      cuerpoAct.innerHTML = App.empty('historial', 'Sin actividad registrada', 'Las operaciones del sistema aparecerán aquí.');
+    } else {
+      var htmlT = '<div class="timeline">';
+      for (var t = 0; t < Math.min(act.length, 7); t++) {
+        htmlT += '<div class="tl-item ' + (act[t].ok === false ? 'error' : 'ok') + '">' +
+          '<div class="tl-titulo">' + App.h(act[t].titulo) + '</div>' +
+          (act[t].detalle ? '<div class="tl-detalle">' + App.h(act[t].detalle) + '</div>' : '') +
+          '<div class="tl-fecha">' + App.h(act[t].fecha) + (act[t].hora ? ' · ' + App.h(act[t].hora) : '') + ' · ' + App.h(act[t].tipo) + '</div>' +
+          '</div>';
+      }
+      htmlT += '</div>';
+      cuerpoAct.innerHTML = htmlT;
+    }
+    cardAct.querySelector('#dash-ver-historial').addEventListener('click', function () { App.navegar('historial'); });
+
+    /* Accesos rápidos */
+    var acc = document.createElement('div');
+    acc.className = 'card';
+    acc.style.marginTop = 'var(--esp-5)';
+    acc.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Accesos rápidos</h2></div>' +
+      '<div class="card-cuerpo fila" style="gap:var(--esp-3)">' +
+      '<button class="btn btn-secundario" id="dash-ac-nuevo">' + App.icono('voluntarios') + 'Registrar voluntario</button>' +
+      '<button class="btn btn-secundario" id="dash-ac-entrada">' + App.icono('inventario') + 'Registrar entrada</button>' +
+      '<button class="btn btn-secundario" id="dash-ac-entrega">' + App.icono('entregas') + 'Registrar entrega</button>' +
+      '<button class="btn btn-secundario" id="dash-ac-inventario">' + App.icono('paquete') + 'Ver inventario</button>' +
+      '</div>';
+    cont.appendChild(acc);
+    acc.querySelector('#dash-ac-nuevo').addEventListener('click', abrirNuevoVoluntario);
+    acc.querySelector('#dash-ac-entrada').addEventListener('click', abrirEntradaInventario);
+    acc.querySelector('#dash-ac-entrega').addEventListener('click', function () { App.navegar('entregas'); });
+    acc.querySelector('#dash-ac-inventario').addEventListener('click', function () { App.navegar('inventario'); });
+
+    /* Gráficos */
+    var graficos = document.createElement('div');
+    graficos.className = 'rejilla-2';
+    graficos.style.marginTop = 'var(--esp-5)';
+    graficos.innerHTML = '<div class="card" id="dash-g-vol"></div><div class="card" id="dash-g-cat"></div>';
+    cont.appendChild(graficos);
+    graficos.querySelector('#dash-g-vol').innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Voluntarios por estado</h2></div><div class="card-cuerpo" id="dash-vol-cuerpo"></div>';
+    graficos.querySelector('#dash-g-cat').innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Voluntarios por categoría</h2></div><div class="card-cuerpo" id="dash-cat-cuerpo"></div>';
+
+    var apiladas = document.createElement('div');
+    apiladas.className = 'card';
+    apiladas.style.marginTop = 'var(--esp-5)';
+    apiladas.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Distribución del inventario por estado</h2></div>' +
+      '<div class="card-cuerpo" id="dash-inv-cuerpo"></div>';
+    cont.appendChild(apiladas);
+
+    renderDonut(dashVolCuerpo(), v.porEstado || [], COLOR_ESTADOS_VOL, 'Sin voluntarios registrados');
+    renderDonut(dashCatCuerpo(), porCategoriaArray(v.porCategoria), COLOR_CATEGORIAS, 'Sin categorías registradas');
+    renderApiladas(dashInvCuerpo(), inv);
+
+    /* Acciones de cabecera */
+    document.getElementById('dash-nuevo-voluntario').addEventListener('click', abrirNuevoVoluntario);
+    document.getElementById('dash-entrada-inventario').addEventListener('click', abrirEntradaInventario);
+  }
+
+  function dashVolCuerpo() { return document.getElementById('dash-vol-cuerpo'); }
+  function dashCatCuerpo() { return document.getElementById('dash-cat-cuerpo'); }
+  function dashInvCuerpo() { return document.getElementById('dash-inv-cuerpo'); }
+
+  function porCategoriaArray(obj) {
+    var res = [];
+    for (var k in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k] > 0) res.push({ estado: k, n: obj[k] });
+    }
+    return res.sort(function (a, b) { return b.n - a.n; });
+  }
+
+  /* ---- Gráficos CSS puros ---- */
+
+  function renderDonut(cuerpo, datos, colores, vacio) {
+    if (!cuerpo) return;
+    if (!datos.length) {
+      cuerpo.innerHTML = App.empty('dashboard', 'Sin datos', vacio);
+      return;
+    }
+    var total = datos.reduce(function (a, b) { return a + (b.n || 0); }, 0);
+    if (!total) { cuerpo.innerHTML = App.empty('dashboard', 'Sin datos', vacio); return; }
+    var acum = 0;
+    var parches = datos.map(function (e) {
+      var pct = (e.n / total) * 100;
+      var segmento = acum + 'deg ' + (acum + pct) + 'deg';
+      acum += pct;
+      return segmento + ' ' + (colores[e.estado] || '#7C8CA3');
+    }).join(', ');
+    var leyenda = datos.map(function (e) {
+      return '<span class="leyenda"><span class="muestra" style="background:' + (colores[e.estado] || '#7C8CA3') + '"></span>' +
+        App.h(e.estado) + ' · <strong>' + e.n + '</strong></span>';
+    }).join('');
+    cuerpo.innerHTML = '<div class="donut" style="background:conic-gradient(' + parches + ')">' +
+      '<div class="donut-hueco">' + total + '<small>total</small></div></div>' +
+      '<div class="grafico-leyenda">' + leyenda + '</div>';
+  }
+
+  function renderApiladas(cuerpo, inv) {
+    if (!cuerpo) return;
+    var estados = ['Disponible', 'Entregado', 'Dañado', 'Extraviado', 'Baja'];
+    var porElem = inv.porElemento || [];
+    if (!porElem.length) {
+      cuerpo.innerHTML = App.empty('inventario', 'Sin inventario', 'Registra existencias para ver la distribución.');
+      return;
+    }
+    var html = '<div class="barras-apiladas">';
+    for (var i = 0; i < porElem.length; i++) {
+      var e = porElem[i];
+      var total = e.total || 1;
+      var segs = '';
+      for (var s = 0; s < estados.length; s++) {
+        var n = (e.porEstado && e.porEstado[estados[s]]) || 0;
+        if (n <= 0) continue;
+        var pct = Math.round((n / total) * 100);
+        segs += '<div class="ba-seg" style="height:' + pct + '%;background:' + (COLOR_ESTADOS_INV[estados[s]] || '#7C8CA3') + '" title="' + App.h(estados[s] + ': ' + n) + '"></div>';
+      }
+      html += '<div class="ba-grupo"><div class="ba-columna">' + (segs || '<div class="ba-seg" style="height:100%;background:#E4E9F0"></div>') + '</div>' +
+        '<span class="ba-rotulo">' + App.h(e.elemento) + ' (' + e.total + ')</span></div>';
+    }
+    cuerpo.innerHTML = html + '</div>' +
+      '<div class="grafico-leyenda">' + estados.map(function (es) {
+        return '<span class="leyenda"><span class="muestra" style="background:' + COLOR_ESTADOS_INV[es] + '"></span>' + App.h(es) + '</span>';
+      }).join('') + '</div>';
+  }
+
+  /* ---- Acciones rápidas ---- */
+
+  function abrirNuevoVoluntario() {
+    App.memo('config', 60000, function () { return App.pedir('obtenerConfiguracion'); }).then(function (cfg) {
+      var categorias = ['Aspirante', 'Disponible', 'Voluntario', 'Reserva'];
+      for (var i = 0; i < cfg.length; i++) {
+        if (cfg[i].parametro === 'CATEGORIAS') {
+          var ca = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+          if (ca.length) categorias = ca;
+        }
+      }
+      var opts = categorias.map(function (c) { return '<option value="' + App.h(c) + '">' + App.h(c) + '</option>'; }).join('');
+      var m = App.modal({
+        titulo: 'Nuevo voluntario',
+        cuerpo:
+          '<div class="campo"><label for="nv-run">RUN *</label><input class="input" id="nv-run" placeholder="Ej.: 12.345.678-5"></div>' +
+          '<div class="campo"><label for="nv-nombres">Nombres *</label><input class="input" id="nv-nombres" placeholder="Ej.: Juan Pablo"></div>' +
+          '<div class="campo"><label for="nv-paterno">Apellido paterno *</label><input class="input" id="nv-paterno" placeholder="Ej.: Pérez"></div>' +
+          '<div class="campo"><label for="nv-materno">Apellido materno</label><input class="input" id="nv-materno" placeholder="Opcional"></div>' +
+          '<div class="campo"><label for="nv-categoria">Categoría</label><select class="select" id="nv-categoria">' + opts + '</select></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-nv="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="nv-guardar">' + App.icono('check') + 'Registrar</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-nv]').addEventListener('click', m.cerrar);
+      document.getElementById('nv-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('nv-guardar');
+        App.botonEstado(btn, 'procesando', 'Registrando…');
+        App.pedir('crearPersonaV2', [{
+          run: document.getElementById('nv-run').value.trim(),
+          nombres: document.getElementById('nv-nombres').value.trim(),
+          apPaterno: document.getElementById('nv-paterno').value.trim(),
+          apMaterno: document.getElementById('nv-materno').value.trim(),
+          categoria: document.getElementById('nv-categoria').value,
+          voluntario: true
+        }]).then(function (r) {
+          m.cerrar();
+          App.toast('Voluntario registrado (N° ' + r.voluntarioId + ')', 'ok');
+          App.trasCambio();
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo registrar', 'error');
+        });
+      });
+    }).catch(function () {
+      App.toast('No se pudo cargar la configuración', 'error');
+    });
+  }
+
+  function abrirEntradaInventario() {
+    App.pedir('buscarElementos').then(function (elementos) {
+      var activos = elementos.filter(function (e) { return e.activo; });
+      var opts = activos.map(function (e) {
+        return '<option value="' + App.h(e.id) + '">' + App.h(e.elemento) + ' (' + App.h(e.id) + ')</option>';
+      }).join('');
+      if (!activos.length) {
+        App.toast('No hay elementos activos en el catálogo', 'aviso');
+        return;
+      }
+      var m = App.modal({
+        titulo: 'Entrada de inventario',
+        cuerpo:
+          '<div class="campo"><label for="ei-elemento">Elemento *</label><select class="select" id="ei-elemento">' + opts + '</select></div>' +
+          '<div class="campo-fila">' +
+          '<div class="campo"><label for="ei-talla">Talla</label><input class="input" id="ei-talla" placeholder="Ej.: M (o vacío)"></div>' +
+          '<div class="campo"><label for="ei-cantidad">Cantidad *</label><input class="input" id="ei-cantidad" type="number" min="1" value="1"></div>' +
+          '</div>' +
+          '<div class="campo"><label for="ei-estado">Estado</label><select class="select" id="ei-estado">' +
+          '<option value="Disponible">Disponible</option><option value="Dañado">Dañado</option><option value="Baja">Baja</option>' +
+          '</select></div>' +
+          '<div class="campo"><label for="ei-obs">Observaciones</label><input class="input" id="ei-obs" placeholder="Opcional"></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-ei="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="ei-guardar">' + App.icono('check') + 'Registrar entrada</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-ei]').addEventListener('click', m.cerrar);
+      document.getElementById('ei-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('ei-guardar');
+        var cantidad = parseInt(document.getElementById('ei-cantidad').value, 10);
+        if (!cantidad || cantidad < 1) { App.toast('Cantidad inválida', 'aviso'); return; }
+        App.botonEstado(btn, 'procesando', 'Registrando…');
+        App.pedir('registrarEntradaInventario', [{
+          elementoId: document.getElementById('ei-elemento').value,
+          talla: document.getElementById('ei-talla').value.trim() || null,
+          cantidad: cantidad,
+          estado: document.getElementById('ei-estado').value,
+          observaciones: document.getElementById('ei-obs').value.trim() || null
+        }]).then(function () {
+          m.cerrar();
+          App.toast('Entrada registrada', 'ok');
+          App.trasCambio();
+          cargar();
+        }).catch(function (err) {
+          App.botonEstado(btn, 'normal');
+          App.toast(err.message || 'No se pudo registrar la entrada', 'error');
+        });
+      });
+    }).catch(function (err) {
+      App.toast(err.message || 'No se pudo cargar el catálogo', 'error');
+    });
+  }
+
+  /* ---- Carga (agregador V2 + composición de lectura) ---- */
+
+  function mesClave(fechaTexto) {
+    var partes = String(fechaTexto || '').split('/');
+    if (partes.length !== 3) return null;
+    var d = new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+    return isNaN(d.getTime()) ? null : { anio: d.getFullYear(), mes: d.getMonth(), d: d };
+  }
+
+  function entregasPorMes(lista) {
+    var MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    var ahora = new Date();
+    var porMes = {};
+    for (var m = 5; m >= 0; m--) {
+      var d0 = new Date(ahora.getFullYear(), ahora.getMonth() - m, 1);
+      var clave = d0.getFullYear() + '-' + d0.getMonth();
+      porMes[clave] = { mes: MESES[d0.getMonth()], anio: d0.getFullYear(), n: 0 };
+    }
+    for (var i = 0; i < lista.length; i++) {
+      var c = mesClave(lista[i].fechaEntrega);
+      if (c) {
+        var k = c.anio + '-' + c.mes;
+        if (porMes[k]) porMes[k].n++;
+      }
+    }
+    return Object.keys(porMes).map(function (k) { return porMes[k]; });
+  }
+
+  function inventarioResumen(filasInv) {
+    var res = { disponible: 0, entregado: 0, danado: 0, extraviado: 0, baja: 0, porElemento: [] };
+    var porElem = {};
+    for (var i = 0; i < filasInv.length; i++) {
+      var f = filasInv[i];
+      if (f.estado === 'Disponible') res.disponible += f.cantidad;
+      else if (f.estado === 'Entregado') res.entregado += f.cantidad;
+      else if (f.estado === 'Dañado') res.danado += f.cantidad;
+      else if (f.estado === 'Extraviado') res.extraviado += f.cantidad;
+      else if (f.estado === 'Baja') res.baja += f.cantidad;
+      if (!porElem[f.elementoId]) porElem[f.elementoId] = { elemento: f.elemento, porEstado: {}, total: 0 };
+      porElem[f.elementoId].porEstado[f.estado] = (porElem[f.elementoId].porEstado[f.estado] || 0) + f.cantidad;
+      porElem[f.elementoId].total += f.cantidad;
+    }
+    res.porElemento = Object.keys(porElem).map(function (id) {
+      return { elemento: porElem[id].elemento, total: porElem[id].total, porEstado: porElem[id].porEstado };
+    }).sort(function (a, b) { return b.total - a.total; }).slice(0, 8);
+    return res;
+  }
+
+  function entregasResumen(lista) {
+    var pendientes = 0;
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].estado === 'Pendiente de devolución') pendientes++;
+    }
+    return { total: lista.length, pendientes: pendientes, porMes: entregasPorMes(lista) };
+  }
+
+  function cargar() {
+    App.memo('dashboard', 30000, function () {
+      return Promise.all([
+        App.pedir('obtenerResumenDashboardV2'),
+        App.pedir('buscarElementos'),
+        App.pedir('obtenerInventario'),
+        App.pedir('obtenerHistorialEntregasV2'),
+        App.pedir('listarServiciosV2'),
+        App.pedir('obtenerEstadisticasAsistenciaV2')
+      ]).then(function (r) {
+        var v2 = r[0];
+        var elementos = r[1] || [];
+        var inv = inventarioResumen(r[2] || []);
+        var ent = entregasResumen(r[3] || []);
+        var srv = r[4] || [];
+        var asi = r[5] || {};
+        var alertasInfo = (v2 && v2.alertas) || { total: 0, criticas: 0, alertas: [] };
+        var catalogados = 0;
+        for (var i = 0; i < elementos.length; i++) if (elementos[i].activo) catalogados++;
+        var activosSrv = 0;
+        for (var j = 0; j < srv.length; j++) if (srv[j].estado === 'Activo') activosSrv++;
+        return {
+          voluntarios: (v2 && v2.voluntarios) || {},
+          catalogo: { activos: catalogados, total: elementos.length },
+          inventario: inv,
+          entregas: ent,
+          servicios: { activos: activosSrv, total: srv.length },
+          asistencia: asi,
+          alertas: alertasInfo.alertas || [],
+          resumenAlerta: { total: alertasInfo.total || 0, criticas: alertasInfo.criticas || 0 },
+          actividadReciente: (v2 && v2.actividadReciente) || [],
+          version: (v2 && v2.version) || '',
+          generado: (v2 && v2.generado) || ''
+        };
+      });
+    }).then(render).catch(function (err) {
+      cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el panel.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeletonTarjetas(cont, 6);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('dashboard', DashboardModule);</script>

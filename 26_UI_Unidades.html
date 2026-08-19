@@ -1,0 +1,211 @@
+<script>/* ============ PÁGINA: UNIDADES (V2) ============
+   Unidades internas con integrantes (rol, ingreso, egreso append-only)
+   (backend 30_Unidades.js). */
+
+var UnidadesModule = (function () {
+  'use strict';
+  var cont = null;
+  var lista = [];
+
+  function cargar() {
+    App.pedir('listarUnidadesV2').then(function (res) {
+      lista = res || [];
+      render();
+    }).catch(function (err) {
+      cont.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las unidades.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Unidades</h1>' +
+      '<p class="page-sub">Unidades internas de la sede con sus integrantes</p></div>' +
+      '<div class="page-acciones"><button class="btn btn-primario" id="un-nuevo">' + App.icono('mas') + 'Nueva unidad</button></div>';
+    cont.appendChild(cabecera);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = '<div class="card-cuerpo sin-pad" id="un-cuerpo"></div>';
+    cont.appendChild(card);
+    pintar();
+
+    document.getElementById('un-nuevo').addEventListener('click', formUnidad(null));
+  }
+
+  function pintar() {
+    var cuerpo = document.getElementById('un-cuerpo');
+    if (!cuerpo) return;
+    if (!lista.length) {
+      cuerpo.innerHTML = App.empty('unidades', 'Sin unidades', 'Crea la primera unidad interna con el botón "Nueva unidad".');
+      return;
+    }
+    var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>Unidad</th><th>Estado</th><th>Jefe (Vol. N°)</th><th>Integrantes</th><th>Creación</th><th style="text-align:right">Acciones</th></tr></thead><tbody>';
+    for (var i = 0; i < lista.length; i++) {
+      var u = lista[i];
+      html += '<tr>' +
+        '<td class="fuerte">' + App.h(u.nombre) + (u.descripcion ? '<div class="texto-dim" style="font-weight:400">' + App.h(u.descripcion) + '</div>' : '') + '</td>' +
+        '<td>' + App.badge(u.estado, u.estado === 'Activa' ? 'ok' : (u.estado === 'En formación' ? 'aviso' : 'gris')) + '</td>' +
+        '<td class="num">' + App.h(u.jefeId || '—') + '</td>' +
+        '<td class="num">' + (u.integrantes || 0) + '</td>' +
+        '<td>' + App.h(u.fechaCreacion || '—') + '</td>' +
+        '<td><div class="acciones">' +
+        '<button class="btn-icono" data-un-edit="' + App.h(u.id) + '" title="Editar" aria-label="Editar unidad">' + App.icono('editar') + '</button>' +
+        '<button class="btn-icono" data-un-det="' + App.h(u.id) + '" title="Integrantes" aria-label="Integrantes">' + App.icono('voluntarios') + '</button>' +
+        '</div></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    cuerpo.innerHTML = html;
+    cuerpo.querySelectorAll('[data-un-edit]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = lista.find(function (u) { return u.id === this.getAttribute('data-un-edit'); }, b);
+        if (item) formUnidad(item)();
+      });
+    });
+    cuerpo.querySelectorAll('[data-un-det]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = lista.find(function (u) { return u.id === this.getAttribute('data-un-det'); }, b);
+        if (item) detalleUnidad(item);
+      });
+    });
+  }
+
+  function formUnidad(item) {
+    return function () {
+      var esNuevo = !item;
+      var m = App.modal({
+        titulo: esNuevo ? 'Nueva unidad' : 'Editar unidad: ' + App.h(item.nombre),
+        cuerpo: '<div class="campo"><label for="un-f-nombre">Nombre *</label><input class="input" id="un-f-nombre" value="' + App.h(item ? item.nombre : '') + '"></div>' +
+          '<div class="campo"><label for="un-f-desc">Descripción</label><textarea class="textarea" id="un-f-desc" rows="2">' + App.h(item ? item.descripcion : '') + '</textarea></div>' +
+          '<div class="campo-fila">' +
+          '<div class="campo"><label for="un-f-estado">Estado</label><select class="select" id="un-f-estado">' +
+          ['En formación', 'Activa', 'Inactiva'].map(function (e) {
+            return '<option' + (item && item.estado === e ? ' selected' : '') + '>' + e + '</option>';
+          }).join('') + '</select></div>' +
+          '<div class="campo"><label for="un-f-jefe">Jefe (Voluntario N°)</label><input class="input" id="un-f-jefe" value="' + App.h(item ? item.jefeId : '') + '"></div></div>' +
+          (esNuevo ? '<div class="campo"><label for="un-f-fecha">Fecha de creación</label><input class="input" id="un-f-fecha" placeholder="dd/mm/aaaa"></div>' : '') +
+          '<div class="campo"><label for="un-f-obs">Observaciones</label><textarea class="textarea" id="un-f-obs" rows="2">' + App.h(item ? item.observaciones : '') + '</textarea></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="un-f-guardar">' + App.icono('check') + (esNuevo ? 'Crear unidad' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('un-f-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('un-f-guardar');
+        btn.disabled = true;
+        var datos = {
+          nombre: document.getElementById('un-f-nombre').value,
+          descripcion: document.getElementById('un-f-desc').value,
+          estado: document.getElementById('un-f-estado').value,
+          jefeId: document.getElementById('un-f-jefe').value,
+          observaciones: document.getElementById('un-f-obs').value
+        };
+        if (esNuevo) datos.fechaCreacion = document.getElementById('un-f-fecha').value;
+        App.pedir(esNuevo ? 'crearUnidadV2' : 'actualizarUnidadV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Unidad creada' : 'Unidad actualizada', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  function detalleUnidad(item) {
+    var m = App.modal({
+      titulo: 'Unidad: ' + App.h(item.nombre),
+      ancho: 'ancho',
+      cuerpo: '<div class="alerta alerta-info" role="status">' + App.icono('alerta') +
+        '<div><strong>' + App.h(item.nombre) + '</strong> — ' + App.h(item.estado) + ' · Jefe Vol. ' + App.h(item.jefeId || '—') + ' · ' + (item.integrantes || 0) + ' integrante(s) activo(s)</div></div>' +
+        '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cabecera"><strong>Integrantes</strong>' +
+        '<button class="btn btn-primario" id="un-asig-nuevo">' + App.icono('mas') + 'Asignar integrante</button></div>' +
+        '<div class="card-cuerpo sin-pad" id="un-int-cuerpo"></div></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cerrar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    pintarIntegrantes(item.id);
+    document.getElementById('un-asig-nuevo').addEventListener('click', function () { formIntegrante(item.id); });
+  }
+
+  function pintarIntegrantes(unidadId) {
+    var cuerpo = document.getElementById('un-int-cuerpo');
+    App.pedir('listarIntegrantesUnidadV2', [unidadId]).then(function (res) {
+      var items = res || [];
+      if (!cuerpo) return;
+      if (!items.length) { cuerpo.innerHTML = App.empty('voluntarios', 'Sin integrantes', 'Asigna el primer integrante de la unidad.'); return; }
+      cuerpo.innerHTML = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Voluntario</th><th>Rol</th><th>Ingreso</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+        items.map(function (x) {
+          return '<tr><td class="fuerte">' + App.h(x.voluntario) + ' <span class="texto-dim">(' + App.h(x.voluntarioId) + ')</span></td>' +
+            '<td>' + App.h(x.rol || '—') + '</td>' +
+            '<td>' + App.h(x.fechaIngreso || '—') + '</td>' +
+            '<td>' + (x.activo ? App.badge('Activo', 'ok') : App.badge('Egresado', 'gris')) + '</td>' +
+            '<td><div class="acciones">' +
+            (x.activo ? '<button class="btn-icono btn-icono-rojo" data-int-egr="' + App.h(x.id) + '" title="Egresar de la unidad" aria-label="Egresar">' + App.icono('alerta') + '</button>' : '') +
+            '</div></td></tr>';
+        }).join('') + '</tbody></table></div>';
+      cuerpo.querySelectorAll('[data-int-egr]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var id = b.getAttribute('data-int-egr');
+          App.confirmar({ titulo: 'Egresar integrante', mensaje: '¿Egresar a este voluntario de la unidad? La fila queda cerrada (no se elimina).', confirmar: 'Egresar', tipo: 'peligro' }).then(function (si) {
+            if (!si) return;
+            App.pedir('egresarIntegranteUnidadV2', [id, {}]).then(function () {
+              App.toast('Integrante egresado de la unidad', 'ok');
+              App.trasCambio();
+              pintarIntegrantes(unidadId);
+              cargar();
+            }).catch(function (err) { App.toast(err.message || 'No se pudo egresar', 'error'); });
+          });
+        });
+      });
+    }).catch(function (err) {
+      if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar los integrantes.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function formIntegrante(unidadId) {
+    var m = App.modal({
+      titulo: 'Asignar integrante',
+      cuerpo: '<div class="campo"><label for="un-a-vol">Voluntario N°</label><input class="input" id="un-a-vol" placeholder="Ej.: 3"></div>' +
+        '<div class="campo"><label for="un-a-rol">Rol en la unidad</label><input class="input" id="un-a-rol" placeholder="Ej.: Jefe de brigada"></div>' +
+        '<div class="campo"><label for="un-a-fecha">Fecha de ingreso (dd/mm/aaaa)</label><input class="input" id="un-a-fecha"></div>' +
+        '<div class="campo"><label for="un-a-obs">Observaciones</label><textarea class="textarea" id="un-a-obs" rows="2"></textarea></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="un-a-guardar">' + App.icono('check') + 'Asignar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('un-a-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('un-a-guardar');
+      var vol = document.getElementById('un-a-vol').value.trim();
+      if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
+      btn.disabled = true;
+      App.pedir('asignarIntegranteUnidadV2', [unidadId, vol, {
+        rol: document.getElementById('un-a-rol').value,
+        fechaIngreso: document.getElementById('un-a-fecha').value,
+        observaciones: document.getElementById('un-a-obs').value
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Integrante asignado', 'ok');
+        App.trasCambio();
+        pintarIntegrantes(unidadId);
+        cargar();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo asignar', 'error');
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('unidades', UnidadesModule);</script>

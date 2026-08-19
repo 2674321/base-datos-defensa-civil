@@ -1,0 +1,518 @@
+<script>/* ============ PÁGINA: FICHA DE VOLUNTARIO (V2 — FASE V3.4B) ============
+   Fuente única V2: listarPersonasV2 → obtenerPersonaV2 (perfil + vigentes +
+   antigüedades) y APIs V2 por sección (especialidades, credenciales,
+   capacitaciones, unidades, equipamiento, servicios, asistencia, historial).
+   Cada sección vacía muestra Empty State (no se oculta silenciosamente). */
+
+var FichaModule = (function () {
+  'use strict';
+
+  var m = {
+    id: null,
+    cont: null,
+    persona: null,
+    voluntario: null,
+    vigente: { grado: null, cargo: null },
+    antiguedades: null,
+    tab: 'personal',
+    cargado: {}
+  };
+
+  function volId(n) { return 'VOL-' + String(n).padStart(4, '0'); }
+
+  function item(etiqueta, valor) {
+    return '<div class="item-ficha"><div class="k">' + App.h(etiqueta) + '</div>' +
+      '<div class="v">' + (valor ? App.h(valor) : '<span style="color:var(--texto-3);font-weight:400">—</span>') + '</div></div>';
+  }
+
+  function itemAnios(etiqueta, anios) {
+    return item(etiqueta, anios === null || anios === undefined ? null : anios + ' año(s)');
+  }
+
+  function tabla(columnas, filasHtml, vacioIcono, vacioTitulo, vacioTexto) {
+    if (!filasHtml) {
+      return App.empty(vacioIcono, vacioTitulo, vacioTexto);
+    }
+    return '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      columnas.map(function (c) { return '<th>' + App.h(c) + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + filasHtml + '</tbody></table></div>';
+  }
+
+  function renderCabecera(cont) {
+    var p = m.persona;
+    var v = m.voluntario;
+    var g = m.vigente.grado;
+    var cargos = m.vigente.cargos && m.vigente.cargos.length ? m.vigente.cargos : (m.vigente.cargo ? [m.vigente.cargo] : []);
+    var chipsCargo = cargos.map(function (c) {
+      return '<span class="chip" title="' + App.h('Cargo desde ' + (c.fechaDesde || '—')) + '">' +
+        App.h(c.cargo) + (c.area ? ' (' + App.h(c.area) + ')' : '') + '</span>';
+    }).join('');
+    cont.innerHTML =
+      '<div class="page-cabecera">' +
+      '<button class="btn btn-ghost" id="btn-volver" style="padding-left:0">' + App.icono('flechaIzq') + ' Volver a voluntarios</button>' +
+      '<div class="page-acciones">' +
+      (v && v.estado !== 'Egresado' ? '<button class="btn btn-secundario" id="btn-baja-ficha" style="color:var(--peligro);border-color:#F3C3BE">' + App.icono('x') + 'Dar de baja</button>' : '') +
+      (v && v.estado === 'Egresado' ? '<button class="btn btn-secundario" id="btn-reactivar-ficha">' + App.icono('check') + 'Reactivar</button>' : '') +
+      '<button class="btn btn-primario" id="btn-entrega-ficha">' + App.icono('entregas') + 'Registrar entrega</button>' +
+      '</div></div>' +
+
+      '<div class="card" style="margin-bottom:var(--esp-5)">' +
+      '<div class="card-cuerpo" style="display:flex;align-items:center;gap:var(--esp-4);flex-wrap:wrap">' +
+      '<div class="avatar" style="width:58px;height:58px;font-size:20px;border-radius:14px">' + App.h(App.iniciales(p.nombres + ' ' + p.apPaterno)) + '</div>' +
+      '<div style="flex:1;min-width:220px">' +
+      '<h1 class="page-titulo" style="font-size:19px">' + App.h([p.nombres, p.apPaterno, p.apMaterno].filter(Boolean).join(' ')) + '</h1>' +
+      '<div class="fila" style="margin-top:4px;flex-wrap:wrap">' +
+      '<span class="num" style="color:var(--texto-2)">' + App.h(p.run || '—') + '</span>' +
+      '<span class="num" style="color:var(--texto-3)">' + App.h(volId(m.id)) + '</span>' +
+      (v ? App.estadoVoluntario(v.estado) : '') +
+      (v && v.categoria ? '<span class="chip">Categoría: ' + App.h(v.categoria) + '</span>' : '') +
+      (g ? '<span class="chip">' + App.patch(g.grado, 'Grado: ' + g.grado) + App.h(g.grado) + '</span>' : '') +
+      chipsCargo +
+      '</div></div>' +
+      '</div>' +
+
+      '<div class="tabs" role="tablist">' +
+      '<button class="tab" data-tab="personal" role="tab">Personal</button>' +
+      '<button class="tab" data-tab="admin" role="tab">Administrativo</button>' +
+      '<button class="tab" data-tab="capacidades" role="tab">Especialidades y credenciales</button>' +
+      '<button class="tab" data-tab="equipamiento" role="tab">Equipamiento</button>' +
+      '<button class="tab" data-tab="servicios" role="tab">Servicios</button>' +
+      '<button class="tab" data-tab="asistencia" role="tab">Asistencia</button>' +
+      '<button class="tab" data-tab="historial" role="tab">Historial</button>' +
+      '</div>' +
+      '<div class="tab-panel" id="tab-cuerpo"></div>' +
+      '</div>';
+
+    cont.querySelector('#btn-volver').addEventListener('click', function () { App.navegar('voluntarios'); });
+    cont.querySelector('#btn-entrega-ficha').addEventListener('click', function () {
+      App.navegar('entregas', { id: m.id });
+    });
+    var btnBaja = cont.querySelector('#btn-baja-ficha');
+    if (btnBaja) {
+      btnBaja.addEventListener('click', function () {
+        App.confirmar({
+          titulo: 'Dar de baja',
+          mensaje: '¿Confirmas la baja (Egresado)? El registro se conserva en el historial (cierre lógico).',
+          confirmar: 'Dar de baja',
+          tipo: 'peligro'
+        }).then(function (ok) {
+          if (!ok) return;
+          App.pedir('darDeBajaVoluntarioV2', [m.id, {}]).then(function () {
+            App.toast('Voluntario dado de baja', 'ok');
+            App.trasCambio();
+            cargar(cont);
+          }).catch(function (err) { App.toast(err.message, 'error'); });
+        });
+      });
+    }
+    var btnReactivar = cont.querySelector('#btn-reactivar-ficha');
+    if (btnReactivar) {
+      btnReactivar.addEventListener('click', function () {
+        App.confirmar({
+          titulo: 'Reactivar voluntario',
+          mensaje: '¿Reactivar a este voluntario? Volverá a estado Activo.',
+          confirmar: 'Reactivar'
+        }).then(function (ok) {
+          if (!ok) return;
+          App.pedir('reactivarVoluntarioV2', [m.id, {}]).then(function () {
+            App.toast('Voluntario reactivado', 'ok');
+            App.trasCambio();
+            cargar(cont);
+          }).catch(function (err) { App.toast(err.message, 'error'); });
+        });
+      });
+    }
+    cont.querySelectorAll('.tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        activarTab(cont, tab.getAttribute('data-tab'));
+      });
+    });
+  }
+
+  function cuerpoTab(cont) { return cont.querySelector('#tab-cuerpo'); }
+
+  function cargarTab(cont, tab, fn) {
+    // V3.4F: las respuestas de tabs de una ficha anterior se descartan.
+    var generacion = m.generacion;
+    if (!m.cargado[tab]) {
+      var cuerpo = cuerpoTab(cont);
+      App.skeleton(cuerpo, 3);
+      m.cargado[tab] = fn().catch(function (err) {
+        if (generacion !== m.generacion) throw err;
+        cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo cargar.</strong> ' + App.h(err.message || err));
+        throw err;
+      });
+    }
+    m.cargado[tab].then(function (html) {
+      if (generacion === m.generacion) cuerpoTab(cont).innerHTML = html;
+    }).catch(function () {});
+  }
+
+  function activarTab(cont, tab) {
+    m.tab = tab;
+    cont.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('activo', t.getAttribute('data-tab') === tab);
+    });
+    if (tab === 'personal') cuerpoTab(cont).innerHTML = renderPersonal();
+    else if (tab === 'admin') cargarTab(cont, 'admin', renderAdmin);
+    else if (tab === 'capacidades') cargarTab(cont, 'capacidades', renderCapacidades);
+    else if (tab === 'equipamiento') cargarTab(cont, 'equipamiento', renderEquipamiento);
+    else if (tab === 'servicios') cargarTab(cont, 'servicios', renderServicios);
+    else if (tab === 'asistencia') cargarTab(cont, 'asistencia', renderAsistencia);
+    else if (tab === 'historial') cargarTab(cont, 'historial', renderHistorial);
+  }
+
+  /* ---- Tabs ---- */
+
+  function renderPersonal() {
+    var p = m.persona;
+    var v = m.voluntario || {};
+    return fotoBloque(p) +
+      '<div class="grid-ficha">' +
+      item('RUN', p.run) +
+      item('Fecha de nacimiento', p.fechaNacimiento) +
+      item('Sexo', p.sexo) +
+      item('Nacionalidad', p.nacionalidad) +
+      item('Dirección', p.direccion) +
+      item('Comuna', p.comuna) +
+      item('Teléfono', p.telefono) +
+      item('Correo', p.correo) +
+      item('Contacto de emergencia', p.emergenciaNombre) +
+      item('Teléfono de emergencia', p.emergenciaTelefono) +
+      item('Grupo sanguíneo', (p.grupoABO ? p.grupoABO + (p.factorRh ? ' ' + p.factorRh : '') : (p.factorRh || null))) +
+      item('Fecha de ingreso', v.fechaIngreso) +
+      item('Observaciones', p.observaciones) +
+      '</div>';
+  }
+
+  /* V3.4D: foto del voluntario por referencia (Drive ID o URL, nunca binaria).
+     Si no hay foto registrada se muestra el placeholder institucional. */
+  function fotoPlaceholder() {
+    return '<div class="foto-placeholder"><span class="foto-ico">' + App.icono('voluntarios') +
+      '</span><span>Fotografía no registrada</span></div>';
+  }
+
+  function fotoBloque(p) {
+    var ref = String(p.fotoDriveId || '');
+    if (ref) {
+      var url = /^https?:\/\//i.test(ref)
+        ? ref
+        : 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(ref) + '&sz=w256';
+      return '<div class="foto-voluntario"><img class="foto-img" src="' + App.h(url) + '" alt="Fotografía de ' +
+        App.h([p.nombres, p.apPaterno].join(' ')) + '" onerror="this.parentNode.innerHTML=FichaModule.fotoPlaceholder()"></div>' +
+        '<p class="foto-nota">Fotografía registrada el ' + App.h(p.fotoFecha || '—') + (p.fotoEstado ? ' · ' + App.h(p.fotoEstado) : '') + '</p>';
+    }
+    return '<div class="foto-voluntario sin-foto">' + fotoPlaceholder() + '</div>';
+  }
+
+  function renderAdmin() {
+    var v = m.voluntario || {};
+    var g = m.vigente.grado;
+    var cargos = m.vigente.cargos && m.vigente.cargos.length ? m.vigente.cargos : (m.vigente.cargo ? [m.vigente.cargo] : []);
+    var a = m.antiguedades || {};
+    var html =
+      '<div class="grid-ficha">' +
+      item('Categoría', v.categoria) +
+      item('Estado', v.estado) +
+      item('Fecha de ingreso', v.fechaIngreso) +
+      item('Fecha de egreso', v.fechaEgreso) +
+      item('Motivo de egreso', v.motivoEgreso) +
+      item('Grado vigente', g ? g.grado + ' (desde ' + g.fechaDesde + ')' + (g.excepcion ? ' · excepción' : '') : null) +
+      item('Cargo(s) vigente(s)', cargos.length ? cargos.map(function (c) {
+        return c.cargo + (c.area ? ' (' + c.area + ')' : '') + (c.fechaDesde ? ' · desde ' + c.fechaDesde : '');
+      }).join(' · ') : null) +
+      itemAnios('Antigüedad institucional', a.institucionalAnios) +
+      itemAnios('Antigüedad en grado', a.enGradoAnios) +
+      itemAnios('Antigüedad en cargo', a.enCargoAnios) +
+      '</div>';
+
+    return App.pedir('listarRetirosTemporalesV2', [m.id]).then(function (retiros) {
+      var filasR = (retiros || []).map(function (r) {
+        return '<tr><td>' + App.h(r.estado) + '</td><td class="num">' + App.h(r.fechaInicio || '—') + '</td>' +
+          '<td class="num">' + App.h(r.fechaTermino || '—') + '</td><td>' + App.h(r.motivo || '—') + '</td></tr>';
+      }).join('');
+      html += '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Retiros temporales</h3>' +
+        tabla(['Estado', 'Desde', 'Hasta', 'Motivo'], filasR || '', 'historial', 'Sin retiros temporales', 'No hay retiros temporales registrados para este voluntario.');
+      return html;
+    }).then(function (htmlCompleto) {
+      return App.pedir('listarUnidadesV2').then(function (unidades) {
+        var unidades2 = unidades || [];
+        var promesas = unidades2.map(function (u) {
+          return App.pedir('listarIntegrantesUnidadV2', [u.id]).then(function (int) {
+            var fila = (int || []).find(function (i) { return String(i.voluntarioId) === String(m.id); });
+            return fila ? { unidad: u.nombre, rol: fila.rol, desde: fila.fechaIngreso, activo: fila.activo } : null;
+          });
+        });
+        return Promise.all(promesas).then(function (encontrados) {
+          var activa = encontrados.filter(Boolean).filter(function (e) { return e.activo; });
+          var historicas = encontrados.filter(Boolean).filter(function (e) { return !e.activo; });
+          var seccion = '';
+          if (activa.length || historicas.length) {
+            var filasU = activa.concat(historicas).map(function (e) {
+              return '<tr><td class="fuerte">' + App.h(e.unidad) + '</td><td>' + App.h(e.rol || '—') + '</td>' +
+                '<td class="num">' + App.h(e.desde || '—') + '</td><td>' + (e.activo ? App.badge('ok', 'Activo') : App.badge('gris', 'Egresado')) + '</td></tr>';
+            }).join('');
+            seccion = '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Unidades</h3>' +
+              tabla(['Unidad', 'Rol', 'Desde', 'Estado'], filasU);
+          } else {
+            seccion = '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Unidades</h3>' +
+              App.empty('voluntarios', 'Sin unidades', 'Este voluntario no es integrante de ninguna unidad interna.');
+          }
+          return htmlCompleto + seccion;
+        });
+      });
+    });
+  }
+
+  function renderCapacidades() {
+    return Promise.all([
+      App.pedir('listarEspecialidadesVoluntarioV2', [m.id]),
+      App.pedir('listarCredencialesVoluntarioV2', [m.id]),
+      App.pedir('listarCapacitacionesVoluntarioV2', [m.id])
+    ]).then(function (r) {
+      var esp = r[0] || [];
+      var cred = r[1] || [];
+      var cap = r[2] || [];
+
+      // V3.4F: deduplicación por ID — la misma especialidad (con sus
+      // habilitaciones/subespecialidades) se muestra UNA sola vez; las
+      // credenciales duplicadas por credencialId también se agrupan.
+      var agrupadas = [];
+      var indice = {};
+      esp.forEach(function (e) {
+        var clave = e.especialidadId || e.especialidad || e.nombre;
+        if (indice[clave] === undefined) {
+          indice[clave] = agrupadas.length;
+          agrupadas.push({
+            especialidad: e.especialidad || e.nombre,
+            especialidadId: e.especialidadId,
+            nivel: e.nivel,
+            fechaAsignacion: e.fechaAsignacion,
+            activo: e.activo,
+            subs: []
+          });
+        }
+        if (e.subespecialidad) agrupadas[indice[clave]].subs.push(e.subespecialidad);
+      });
+      var credUnicas = [];
+      var vistos = {};
+      cred.forEach(function (c) {
+        var clave = c.credencialId || c.nombre;
+        if (vistos[clave]) return;
+        vistos[clave] = true;
+        credUnicas.push(c);
+      });
+
+      var seccionEsp = agrupadas.length ?
+        tabla(['Especialidad', 'Subespecialidades / Habilitaciones', 'Nivel', 'Asignación', 'Estado'],
+          agrupadas.map(function (e) {
+            var subs = e.subs.map(function (s) {
+              return '<span class="chip-hab">' + App.icono('punto') + App.h(s) + '</span>';
+            }).join('');
+            return '<tr><td class="fuerte">' + App.patch(e.especialidad, 'Insignia de ' + e.especialidad) + App.h(e.especialidad) + '</td>' +
+              '<td>' + (subs || '—') + '</td>' +
+              '<td>' + App.h(e.nivel || '—') + '</td>' +
+              '<td class="num">' + App.h(e.fechaAsignacion || '—') + '</td>' +
+              '<td>' + (e.activo ? App.badge('ok', 'Vigente') : App.badge('gris', 'Cerrada')) + '</td></tr>';
+          }).join('')) :
+        App.empty('voluntarios', 'Sin especialidades', 'Este voluntario no tiene especialidades asignadas.');
+
+      var seccionCred = credUnicas.length ?
+        tabla(['Credencial', 'Emisor', 'Número', 'Habilitaciones', 'Obtención', 'Vence', 'Estado'],
+          credUnicas.map(function (c) {
+            return '<tr><td class="fuerte">' + App.h(c.nombre) + '</td>' +
+              '<td>' + App.h(c.emisor || '—') + '</td>' +
+              '<td class="num">' + App.h(c.numero || '—') + '</td>' +
+              '<td>' + App.h(c.modelosHabilitados || '—') + '</td>' +
+              '<td class="num">' + App.h(c.fechaObtencion || '—') + '</td>' +
+              '<td class="num">' + App.h(c.fechaVencimiento || '—') + '</td>' +
+              '<td>' + App.badge(c.estado === 'Vigente' ? 'ok' : (c.estado === 'Por vencer' ? 'aviso' : (c.estado === 'Revocada' ? 'gris' : 'rojo')), c.estado) + '</td></tr>';
+          }).join('')) :
+        App.empty('documento', 'Sin credenciales', 'Este voluntario no tiene credenciales registradas.');
+
+      var seccionCap = cap.length ?
+        tabla(['Capacitación', 'Fecha', 'Vence', 'Estado'],
+          cap.map(function (c) {
+            return '<tr><td class="fuerte">' + App.h(c.nombre) + '</td>' +
+              '<td class="num">' + App.h(c.fecha || '—') + '</td>' +
+              '<td class="num">' + App.h(c.fechaVencimiento || '—') + '</td>' +
+              '<td>' + (c.activo ? App.badge('ok', 'Vigente') : App.badge('gris', 'Cerrada')) + '</td></tr>';
+          }).join('')) :
+        App.empty('asistencia', 'Sin capacitaciones', 'Este voluntario no tiene capacitaciones registradas.');
+
+      return '<h3 class="card-titulo">Especialidades</h3>' + seccionEsp +
+        '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Credenciales</h3>' + seccionCred +
+        '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Capacitaciones</h3>' + seccionCap;
+    });
+  }
+
+  function renderEquipamiento() {
+    return App.pedir('obtenerEquipamientoVoluntarioV2', [m.id]).then(function (lista) {
+      var l = lista || [];
+      if (!l.length) {
+        return App.empty('paquete', 'Sin equipamiento asignado', 'Usa «Registrar entrega» para asignar elementos a este voluntario.');
+      }
+      return tabla(['Elemento', 'Talla', 'Cantidad', 'Fecha', 'Estado'],
+        l.map(function (x) {
+          return '<tr><td class="fuerte">' + App.h(x.elemento) + '</td>' +
+            '<td>' + App.h(x.talla && x.talla !== 'Sin talla' ? x.talla : '—') + '</td>' +
+            '<td class="num">' + App.h(x.cantidad) + '</td>' +
+            '<td class="num">' + App.h(x.fechaEntrega || '—') + '</td>' +
+            '<td>' + App.estadoEntrega(x.estado) + '</td></tr>';
+        }).join(''));
+    });
+  }
+
+  function renderServicios() {
+    return App.pedir('listarServiciosV2').then(function (servicios) {
+      var srv = servicios || [];
+      var promesas = srv.map(function (s) {
+        return App.pedir('obtenerServicioV2', [s.id]).then(function (d) {
+          if (!d || !d.servicio) return null;
+          var todas = (d.asignados || []).concat(d.cerrados || []);
+          var mio = todas.find(function (a) { return String(a.voluntarioId) === String(m.id); });
+          return mio ? {
+            servicio: s.nombre, fecha: s.fecha, tipo: s.tipo, estado: s.estado,
+            rol: mio.rolEnServicio || '—', estadoAsignacion: mio.estado || 'Asignado'
+          } : null;
+        });
+      });
+      return Promise.all(promesas).then(function (items) {
+        var filtrados = items.filter(Boolean);
+        if (!filtrados.length) {
+          return App.empty('servicios', 'Sin servicios', 'Este voluntario no participa en servicios registrados.');
+        }
+        return tabla(['Servicio', 'Fecha', 'Tipo', 'Estado servicio', 'Rol', 'Asignación'],
+          filtrados.map(function (x) {
+            return '<tr><td class="fuerte">' + App.h(x.servicio) + '</td>' +
+              '<td class="num">' + App.h(x.fecha) + '</td>' +
+              '<td>' + App.h(x.tipo) + '</td>' +
+              '<td>' + App.h(x.estado) + '</td>' +
+              '<td>' + App.h(x.rol) + '</td>' +
+              '<td>' + App.h(x.estadoAsignacion) + '</td></tr>';
+          }).join(''));
+      });
+    });
+  }
+
+  function renderAsistencia() {
+    return App.pedir('obtenerResumenAsistenciaVoluntarioV2', [m.id]).then(function (res) {
+      var r = res || { total: 0, porTipo: {} };
+      var tipos = r.porTipo || {};
+      if (!r.total) {
+        return App.empty('asistencia', 'Sin marcajes de asistencia', 'La asistencia de este voluntario aparecerá cuando participe en servicios.');
+      }
+      var kpis = Object.keys(tipos).map(function (t) {
+        var d = tipos[t];
+        return kpiHtml('asistencia', 'celeste', d.total, t + ' — ' + d.presente + ' presente(s), ' + d.ausente + ' ausente(s)');
+      }).join('');
+      return '<div class="rejilla-kpi">' +
+        kpiHtml('asistencia', 'verde', r.total, 'Total de marcajes') +
+        kpis +
+        '</div>';
+    });
+  }
+
+  function kpiHtml(iconoNombre, clase, numero, label) {
+    return '<div class="stat-card"><div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
+      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
+      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
+  }
+
+  function renderHistorial() {
+    return Promise.all([
+      App.pedir('obtenerHistorialGradosV2', [m.id]),
+      App.pedir('obtenerHistorialCargosV2', [m.id]),
+      App.pedir('listarEventosVoluntarioV2', [m.id])
+    ]).then(function (r) {
+      var grados = r[0] || [];
+      var cargos = r[1] || [];
+      var eventos = r[2] || [];
+
+      var seccionGrados = grados.length ?
+        '<div class="timeline">' + grados.map(function (g) {
+          return '<div class="tl-item ' + (g.vigente ? 'ok' : '') + '">' +
+            '<div class="tl-fecha">' + App.h(g.fechaDesde || '—') + (g.fechaHasta ? ' → ' + App.h(g.fechaHasta) : ' · vigente') + '</div>' +
+            '<div class="tl-titulo">' + App.patch(g.grado, 'Grado: ' + g.grado) + App.h(g.grado) + '</div>' +
+            '<div class="tl-detalle">' + (g.excepcion ? 'Excepción: ' + App.h(g.excepcionDetalle || 'sin detalle') : App.h(g.resolucion || 'Sin resolución')) + '</div>' +
+            '</div>';
+        }).join('') + '</div>' :
+        App.empty('voluntarios', 'Sin historial de grados', 'No hay asignaciones de grado registradas.');
+
+      var seccionCargos = cargos.length ?
+        '<div class="timeline">' + cargos.map(function (c) {
+          return '<div class="tl-item ' + (c.vigente ? 'ok' : '') + '">' +
+            '<div class="tl-fecha">' + App.h(c.fechaDesde || '—') + (c.fechaHasta ? ' → ' + App.h(c.fechaHasta) : ' · vigente') + '</div>' +
+            '<div class="tl-titulo">' + App.h(c.cargo) + '</div>' +
+            '<div class="tl-detalle">' + App.h(c.observaciones || 'Sin observaciones') + '</div>' +
+            '</div>';
+        }).join('') + '</div>' :
+        App.empty('voluntarios', 'Sin historial de cargos', 'No hay asignaciones de cargo registradas.');
+
+      var seccionEventos = eventos.length ?
+        '<div class="timeline">' + eventos.map(function (e) {
+          return '<div class="tl-item ok">' +
+            '<div class="tl-fecha">' + App.h(e.fecha || '—') + (e.quienRegistro ? ' · ' + App.h(e.quienRegistro) : '') + '</div>' +
+            '<div class="tl-titulo">' + App.h(e.tipo) + '</div>' +
+            '<div class="tl-detalle">' + App.h(e.detalle || '') + '</div>' +
+            '</div>';
+        }).join('') + '</div>' :
+        App.empty('historial', 'Sin eventos', 'Los eventos de este voluntario aparecerán aquí.');
+
+      return '<h3 class="card-titulo">Historial de grados</h3>' + seccionGrados +
+        '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Historial de cargos</h3>' + seccionCargos +
+        '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Eventos</h3>' + seccionEventos;
+    });
+  }
+
+  /* ---- Carga ---- */
+
+  function cargar(cont) {
+    if (!m.id) {
+      cont.innerHTML = App.empty('alerta', 'Voluntario no encontrado', 'La ficha requiere un identificador válido.');
+      return;
+    }
+    // V3.4D: se limpia el contenedor ANTES de cargar — la ficha nunca muestra
+    // el voluntario anterior mientras se carga el nuevo.
+    // V3.4F: token de generación — si una petición llega fuera de orden (el
+    // usuario abrió otra ficha o recargó), su respuesta se descarta.
+    var generacion = (m.generacion || 0) + 1;
+    m.generacion = generacion;
+    var vigente = function () { return m.generacion === generacion; };
+    cont.innerHTML = '';
+    App.skeleton(cont, 3, true);
+    App.pedir('listarPersonasV2').then(function (personas) {
+      if (!vigente()) return null;
+      var persona = (personas || []).find(function (p) { return String(p.voluntarioId) === String(m.id); });
+      if (!persona) throw new Error('Voluntario N° ' + m.id + ' no existe (V2)');
+      // V3.4D: aviso con el nombre del voluntario durante la carga del detalle.
+      cont.innerHTML = '';
+      App.cargando(cont, true, 'Cargando ficha de ' + persona.nombreCompleto + '…');
+      return App.pedir('obtenerPersonaV2', [persona.personaId]);
+    }).then(function (d) {
+      if (!vigente()) return;
+      if (!d || !d.persona) throw new Error('Persona no encontrada');
+      m.persona = d.persona;
+      m.voluntario = d.voluntario || null;
+      m.vigente = { grado: d.gradoVigente || null, cargo: d.cargoVigente || null, cargos: d.cargosVigentes || [] };
+      m.antiguedades = d.antiguedades || null;
+      m.cargado = {};
+      m.tab = 'personal';
+      renderCabecera(cont);
+      activarTab(cont, 'personal');
+    }).catch(function (err) {
+      if (!vigente()) return;
+      cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar la ficha.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function init(cont, params) {
+    m.id = params.id;
+    m.cont = cont;
+    cargar(cont);
+  }
+
+  return { init: init, fotoPlaceholder: fotoPlaceholder };
+})();
+
+App.registrarPagina('ficha', FichaModule);</script>
