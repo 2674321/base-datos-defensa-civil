@@ -94,7 +94,7 @@ var UnidadesModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('un-f-guardar').addEventListener('click', function () {
         var btn = document.getElementById('un-f-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           nombre: document.getElementById('un-f-nombre').value,
           descripcion: document.getElementById('un-f-desc').value,
@@ -108,7 +108,7 @@ var UnidadesModule = (function () {
           App.toast(esNuevo ? 'Unidad creada' : 'Unidad actualizada', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -181,7 +181,7 @@ var UnidadesModule = (function () {
       var btn = document.getElementById('un-a-guardar');
       var vol = document.getElementById('un-a-vol').value.trim();
       if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Asignando…');
       App.pedir('asignarIntegranteUnidadV2', [unidadId, vol, {
         rol: document.getElementById('un-a-rol').value,
         fechaIngreso: document.getElementById('un-a-fecha').value,
@@ -193,7 +193,7 @@ var UnidadesModule = (function () {
         pintarIntegrantes(unidadId);
         cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo asignar', 'error');
       });
     });

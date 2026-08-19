@@ -911,6 +911,15 @@ button { font-family: inherit; }
 @keyframes barra-crecer { from { transform: scaleY(0); } }
 
 /* ---------- 27. ACCESIBILIDAD Y MOVIMIENTO ---------- */
+/* V3.4J: foco visible solo por teclado (focus-visible, nunca en clic) para
+   navegación accesible sin contaminar el aspecto al hacer clic. */
+.btn:focus-visible, .btn-icono:focus-visible, .tab:focus-visible,
+.nav-item:focus-visible, .menu-item:focus-visible, .card-interactiva:focus-visible,
+.ordenable:focus-visible, .select:focus-visible, .step:focus-visible {
+  outline: 2px solid var(--primario); outline-offset: 2px;
+}
+/* V3.4J: presión de nav-item (feedback táctil inmediato). */
+.nav-item:active { background: rgba(255, 255, 255, 0.14); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

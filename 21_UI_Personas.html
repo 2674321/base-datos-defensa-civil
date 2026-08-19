@@ -165,7 +165,7 @@ var PersonasModule = (function () {
     });
     document.getElementById('per-guardar').addEventListener('click', function () {
       var btn = document.getElementById('per-guardar');
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Guardando…');
       App.pedir('crearPersonaV2', [{
         run: document.getElementById('per-run').value,
         nombres: document.getElementById('per-nombres').value,
@@ -191,7 +191,7 @@ var PersonasModule = (function () {
         App.trasCambio();
         cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo registrar', 'error');
       });
     });
@@ -232,7 +232,7 @@ var PersonasModule = (function () {
     m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
     document.getElementById('per-op-accion').addEventListener('click', function () {
       var btn = document.getElementById('per-op-accion');
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', esEgresado ? 'Reactivando…' : 'Dando de baja…');
       var fn = esEgresado ? 'reactivarVoluntarioV2' : 'darDeBajaVoluntarioV2';
       var datos = esEgresado
         ? { fechaIngreso: document.getElementById('per-op-fecha').value, estado: 'Activo' }
@@ -243,7 +243,7 @@ var PersonasModule = (function () {
         App.trasCambio();
         cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo completar la operación', 'error');
       });
     });

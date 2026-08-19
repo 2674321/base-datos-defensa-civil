@@ -181,7 +181,7 @@ var CapacitacionesModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('cp-f-guardar').addEventListener('click', function () {
         var btn = document.getElementById('cp-f-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           nombre: document.getElementById('cp-f-nombre').value,
           institucion: document.getElementById('cp-f-inst').value,
@@ -197,7 +197,7 @@ var CapacitacionesModule = (function () {
           App.toast(esNuevo ? 'Capacitación creada' : 'Capacitación actualizada', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -230,7 +230,7 @@ var CapacitacionesModule = (function () {
       var capId = item ? item.id : document.getElementById('cp-a-cap').value;
       if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
       if (!capId) { App.toast('Selecciona una capacitación', 'aviso'); return; }
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Asignando…');
       App.pedir('asignarCapacitacionV2', [vol, capId, {
         fecha: document.getElementById('cp-a-fecha').value,
         aprobado: document.getElementById('cp-a-aprobada').checked,
@@ -244,7 +244,7 @@ var CapacitacionesModule = (function () {
         if (voluntarioFijo) verPorVoluntario();
         else cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo asignar', 'error');
       });
     });

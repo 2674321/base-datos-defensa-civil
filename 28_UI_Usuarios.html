@@ -140,7 +140,7 @@ var UsuariosModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('us-f-guardar').addEventListener('click', function () {
         var btn = document.getElementById('us-f-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           correo: document.getElementById('us-f-correo').value,
           perfil: document.getElementById('us-f-perfil').value,
@@ -152,7 +152,7 @@ var UsuariosModule = (function () {
           App.toast(esNuevo ? 'Usuario creado' : 'Usuario actualizado', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -176,7 +176,7 @@ var UsuariosModule = (function () {
     m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
     document.getElementById('us-p-guardar').addEventListener('click', function () {
       var btn = document.getElementById('us-p-guardar');
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Guardando…');
       App.pedir('agregarPermisoV2', [{
         perfil: document.getElementById('us-p-perfil').value,
         modulo: document.getElementById('us-p-modulo').value,
@@ -188,7 +188,7 @@ var UsuariosModule = (function () {
         App.toast('Excepción agregada', 'ok');
         cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo agregar', 'error');
       });
     });
