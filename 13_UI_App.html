@@ -208,6 +208,7 @@ var App = (function () {
     if (!activo) return;
     var el = document.createElement('div');
     el.className = 'cargando';
+    el.setAttribute('role', 'status');
     el.innerHTML = '<div class="spinner"></div><span>' + h(mensaje || 'Cargando…') + '</span>';
     contenedor.appendChild(el);
   }
