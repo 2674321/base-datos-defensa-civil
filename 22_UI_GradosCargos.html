@@ -1,0 +1,388 @@
+<script>/* ============ PÁGINA: GRADOS Y CARGOS (V2) ============
+   Grados (semilla, solo lectura + requisitos), cargos y áreas (catálogos con CRUD),
+   asignación de grado (con requisitos y excepción) y cargo a un voluntario
+   (backend 23_GradosCargos.js). */
+
+var GradosCargosModule = (function () {
+  'use strict';
+  var cont = null;
+  var grados = [];
+  var cargos = [];
+  var areas = [];
+  var pestaña = 'grados';
+
+  function cargar() {
+    App.pedir('listarGradosV2').then(function (res) { grados = res || []; })
+      .catch(function () { grados = []; })
+      .then(function () { return App.pedir('listarCargosV2'); })
+      .then(function (res) { cargos = res || []; })
+      .catch(function () { cargos = []; })
+      .then(function () { return App.pedir('listarAreasV2'); })
+      .then(function (res) { areas = res || []; render(); })
+      .catch(function () { areas = []; render(); });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Grados y Cargos</h1>' +
+      '<p class="page-sub">Estructura jerárquica: grados (semilla), cargos por área y asignaciones</p></div>';
+    cont.appendChild(cabecera);
+
+    var tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    tabs.innerHTML =
+      '<button class="tab" data-tab="grados">Grados (' + grados.length + ')</button>' +
+      '<button class="tab" data-tab="cargos">Cargos (' + cargos.length + ')</button>' +
+      '<button class="tab" data-tab="areas">Áreas (' + areas.length + ')</button>';
+    cont.appendChild(tabs);
+    tabs.querySelectorAll('.tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        pestaña = b.getAttribute('data-tab');
+        tabs.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('activa'); });
+        b.classList.add('activa');
+        pintar();
+      });
+    });
+    pintar();
+  }
+
+  function pintar() {
+    // V3.4F: se eliminan TODAS las cards (la pestaña Grados inserta una
+    // segunda card "Requisitos de ascenso"; antes solo se quitaba la primera
+    // y las cards se acumulaban en cada ciclo → duplicación progresiva).
+    cont.querySelectorAll('.card').forEach(function (c) { c.remove(); });
+    var card = document.createElement('div');
+    card.className = 'card';
+    cont.appendChild(card);
+
+    if (pestaña === 'grados') {
+      // V3.4F: jerarquía visual — el distintivo "Jefe de Sede" (cargo/condición
+      // de mando, NO grado) se muestra entre Instructor Mayor y Comandante Local.
+      // V3.4H: "Jefe de sede" es ahora un GRADO real (orden 2). Solo se muestra
+      // la fila meta si NO existe un grado real con ese nombre (backward compat).
+      var metaJefe = App.meta('Jefe de Sede') || {};
+      var tieneGradoReal = grados.some(function (g) { return /jefe de sede/i.test(g.nombre); });
+      var filaJefe = (!tieneGradoReal && metaJefe.tipo === 'DISTINTIVO')
+        ? '<tr class="aviso-fila" title="' + App.h('Cargo/condición de mando — ' + (metaJefe.descripcion || '')) + '"><td class="num">·</td><td class="fuerte">' +
+          App.patch(metaJefe.nombre, 'Distintivo: ' + metaJefe.nombre) + App.h(metaJefe.nombre) +
+          '</td><td>' + App.h('OFICIAL') + '</td>' +
+          '<td>' + App.badge('Activo', 'ok') + '</td></tr>'
+        : '';
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Grados</strong><span class="texto-dim">Escala jerárquica (semilla institucional, no editable) — el Jefe de Sede es cargo/condición de mando con distintivo propio, no grado</span></div>' +
+        '<div class="card-cuerpo sin-pad">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>#</th><th>Grado</th><th>Origen</th><th>Estado</th></tr></thead><tbody>' +
+        grados.map(function (g) {
+          var filas = '<tr><td class="num">' + App.h(g.orden) + '</td><td class="fuerte">' + App.patch(g.nombre, 'Grado: ' + g.nombre) + App.h(g.nombre) + '</td>' +
+            '<td>' + App.h(g.origen) + '</td>' +
+            '<td>' + App.badge(g.activo ? 'Activo' : 'Inactivo', g.activo ? 'ok' : 'gris') + '</td></tr>';
+          // V3.4F: entre Comandante Local (orden 1) e Instructor Mayor (orden 2).
+          if (Number(g.orden) === 2 && filaJefe) return filaJefe + filas;
+          return filas;
+        }).join('') +
+        '</tbody></table></div></div>';
+      card.insertAdjacentHTML('afterend',
+        '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cabecera"><strong>Requisitos de ascenso</strong>' +
+        '<span class="texto-dim">Consulta qué exige un grado para un voluntario</span></div>' +
+        '<div class="card-cuerpo"><div class="campo-fila">' +
+        '<div class="campo"><label for="gc-vol">Voluntario N°</label><input class="input" id="gc-vol" placeholder="Ej.: 3"></div>' +
+        '<div class="campo"><label for="gc-grado">Grado objetivo</label><select class="select" id="gc-grado">' +
+        '<option value="">— Selecciona —</option>' +
+        grados.map(function (g) { return '<option value="' + App.h(g.id) + '">' + App.h(g.nombre) + '</option>'; }).join('') +
+        '</select></div>' +
+        '<button class="btn btn-secundario" id="gc-consultar">' + App.icono('documento') + 'Consultar</button></div>' +
+        '<div id="gc-requisitos" style="margin-top:var(--esp-3)"></div></div></div>');
+      document.getElementById('gc-consultar').addEventListener('click', consultarRequisitos);
+      document.getElementById('gc-grado').addEventListener('change', function (e) {
+        if (e.target.value) consultarRequisitos();
+      });
+      return;
+    }
+
+    if (pestaña === 'cargos') {
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Cargos</strong>' +
+        '<div style="display:flex;gap:var(--esp-2)">' +
+        '<button class="btn btn-secundario" id="gc-cargo-cerrar">' + App.icono('historial') + 'Cerrar cargo</button>' +
+        '<button class="btn btn-primario" id="gc-cargo-nuevo">' + App.icono('mas') + 'Nuevo cargo</button>' +
+        '</div></div>' +
+        '<div class="card-cuerpo sin-pad">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Cargo</th><th>Área</th><th>Orden</th><th>Origen</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+        cargos.map(function (c) {
+          return '<tr><td class="fuerte">' + App.h(c.nombre) + '</td>' +
+            '<td>' + App.h(c.area || '—') + '</td>' +
+            '<td class="num">' + App.h(c.ordenJerarquico) + '</td>' +
+            '<td>' + App.h(c.origen) + '</td>' +
+            '<td>' + App.badge(c.activo ? 'Activo' : 'Inactivo', c.activo ? 'ok' : 'gris') + '</td>' +
+            '<td><div class="acciones">' +
+            '<button class="btn-icono" data-cargo-edit="' + App.h(c.id) + '" title="Editar" aria-label="Editar cargo">' + App.icono('editar') + '</button>' +
+            '<button class="btn-icono" data-cargo-asig="' + App.h(c.id) + '" title="Asignar a voluntario" aria-label="Asignar cargo">' + App.icono('voluntarios') + '</button>' +
+            '</div></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+      document.getElementById('gc-cargo-nuevo').addEventListener('click', cargoForm(null));
+      document.getElementById('gc-cargo-cerrar').addEventListener('click', cerrarCargo);
+      card.querySelectorAll('[data-cargo-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = cargos.find(function (c) { return c.id === this.getAttribute('data-cargo-edit'); }, b);
+          if (item) cargoForm(item)();
+        });
+      });
+      card.querySelectorAll('[data-cargo-asig]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = cargos.find(function (c) { return c.id === this.getAttribute('data-cargo-asig'); }, b);
+          if (item) asignarCargo(item);
+        });
+      });
+      return;
+    }
+
+    card.innerHTML =
+      '<div class="card-cabecera"><strong>Áreas</strong>' +
+      '<button class="btn btn-primario" id="gc-area-nuevo">' + App.icono('mas') + 'Nueva área</button></div>' +
+      '<div class="card-cuerpo sin-pad">' +
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Área</th><th>Orden</th><th>Descripción</th><th>Origen</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+      areas.map(function (a) {
+        return '<tr><td class="fuerte">' + App.h(a.nombre) + '</td>' +
+          '<td class="num">' + App.h(a.orden) + '</td>' +
+          '<td class="aviso-fila">' + App.h(a.descripcion || '') + '</td>' +
+          '<td>' + App.h(a.origen) + '</td>' +
+          '<td>' + App.badge(a.activo ? 'Activo' : 'Inactivo', a.activo ? 'ok' : 'gris') + '</td>' +
+          '<td><div class="acciones"><button class="btn-icono" data-area-edit="' + App.h(a.id) + '" title="Editar" aria-label="Editar área">' + App.icono('editar') + '</button></div></td></tr>';
+      }).join('') +
+      '</tbody></table></div></div>';
+    document.getElementById('gc-area-nuevo').addEventListener('click', areaForm(null));
+    card.querySelectorAll('[data-area-edit]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = areas.find(function (a) { return a.id === this.getAttribute('data-area-edit'); }, b);
+        if (item) areaForm(item)();
+      });
+    });
+  }
+
+  function consultarRequisitos() {
+    var vol = document.getElementById('gc-vol').value.trim();
+    var gradoId = document.getElementById('gc-grado').value;
+    var caja = document.getElementById('gc-requisitos');
+    if (!vol || !gradoId) { caja.innerHTML = ''; return; }
+    caja.innerHTML = '<div class="skeleton" style="height:56px"></div>';
+    App.pedir('obtenerRequisitosGradoV2', [vol, gradoId]).then(function (d) {
+      caja.innerHTML = '<div class="alerta ' + (d.todosCumplidos ? 'alerta-ok' : 'alerta-aviso') + '" role="status">' + App.icono(d.todosCumplidos ? 'check' : 'alerta') +
+        '<div><strong>' + App.h(d.grado.nombre) + '</strong> — ' + (d.todosCumplidos ? 'todos los requisitos cumplidos' : 'requisitos pendientes') +
+        '<ul style="margin:var(--esp-2) 0 0 var(--esp-4)">' +
+        d.requisitos.map(function (q) {
+          return '<li>' + (q.estado === '✓' ? '<span style="color:var(--dc-verde-600)">✓</span>' : (q.estado === '✗' ? '<span style="color:var(--dc-rojo-600)">✗</span>' : '<span style="color:var(--dc-ambar-600)">⚠</span>')) + ' ' + App.h(q.requisito) + '</li>';
+        }).join('') +
+        '</ul></div></div>' +
+        '<button class="btn btn-primario" id="gc-asignar-grado" style="margin-top:var(--esp-3)">' + App.icono('usuario') + 'Asignar este grado a Vol. ' + App.h(vol) + '</button>';
+      document.getElementById('gc-asignar-grado').addEventListener('click', function () {
+        asignarGrado(vol, gradoId, d);
+      });
+    }).catch(function (err) {
+      caja.innerHTML = App.alerta('critica', '<strong>No se pudieron consultar los requisitos.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function asignarGrado(voluntarioId, gradoId, req) {
+    var cuerpo = '<div class="alerta ' + (req.todosCumplidos ? 'alerta-ok' : 'alerta-aviso') + '" role="status">' + App.icono('alerta') +
+      '<div><strong>Requisitos de ' + App.h(req.grado.nombre) + ':</strong> ' +
+      (req.todosCumplidos ? 'cumplidos' : 'los requisitos solo advierten — se puede asignar con excepción') + '</div></div>' +
+      '<div class="campo" style="margin-top:var(--esp-3)"><label for="gc-g-fecha">Fecha desde (dd/mm/aaaa)</label><input class="input" id="gc-g-fecha"></div>' +
+      '<div class="campo"><label for="gc-g-resolucion">Resolución</label><input class="input" id="gc-g-resolucion"></div>' +
+      '<div class="campo"><label for="gc-g-quien">Quién asigna</label><input class="input" id="gc-g-quien"></div>' +
+      '<div class="campo"><label for="gc-g-motivo">Motivo</label><input class="input" id="gc-g-motivo"></div>' +
+      (!req.todosCumplidos ?
+        '<div class="campo"><label><input type="checkbox" id="gc-g-excepcion"> Asignar con excepción (requisitos incompletos)</label></div>' +
+        '<div class="campo"><label for="gc-g-exc-detalle">Detalle de la excepción</label><textarea class="textarea" id="gc-g-exc-detalle" rows="2"></textarea></div>' : '') +
+      '<div class="campo"><label for="gc-g-obs">Observaciones</label><textarea class="textarea" id="gc-g-obs" rows="2"></textarea></div>';
+    var m = App.modal({
+      titulo: 'Asignar grado a Vol. ' + voluntarioId,
+      cuerpo: cuerpo,
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="gc-g-guardar">' + App.icono('check') + 'Asignar grado</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('gc-g-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('gc-g-guardar');
+      btn.disabled = true;
+      App.pedir('asignarGradoV2', [voluntarioId, gradoId, {
+        fechaDesde: document.getElementById('gc-g-fecha').value,
+        resolucion: document.getElementById('gc-g-resolucion').value,
+        quienAsigno: document.getElementById('gc-g-quien').value,
+        motivo: document.getElementById('gc-g-motivo').value,
+        excepcion: document.getElementById('gc-g-excepcion') ? document.getElementById('gc-g-excepcion').checked : false,
+        excepcionDetalle: document.getElementById('gc-g-exc-detalle') ? document.getElementById('gc-g-exc-detalle').value : '',
+        observaciones: document.getElementById('gc-g-obs').value
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Grado asignado', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo asignar el grado', 'error');
+      });
+    });
+  }
+
+  function cargoForm(item) {
+    return function () {
+      var esNuevo = !item;
+      var optAreas = areas.map(function (a) {
+        return '<option value="' + App.h(a.id) + '"' + (item && item.areaId === a.id ? ' selected' : '') + '>' + App.h(a.nombre) + '</option>';
+      }).join('');
+      var m = App.modal({
+        titulo: esNuevo ? 'Nuevo cargo' : 'Editar cargo: ' + App.h(item.nombre),
+        cuerpo: '<div class="campo"><label for="gc-c-nombre">Nombre *</label><input class="input" id="gc-c-nombre" value="' + App.h(item ? item.nombre : '') + '"></div>' +
+          '<div class="campo"><label for="gc-c-area">Área</label><select class="select" id="gc-c-area"><option value="">— Sin área —</option>' + optAreas + '</select></div>' +
+          '<div class="campo"><label for="gc-c-orden">Orden jerárquico</label><input class="input" id="gc-c-orden" type="number" value="' + (item ? item.ordenJerarquico : 0) + '"></div>' +
+          '<div class="campo"><label for="gc-c-desc">Descripción</label><textarea class="textarea" id="gc-c-desc" rows="2">' + App.h(item ? item.descripcion : '') + '</textarea></div>' +
+          '<div class="campo"><label><input type="checkbox" id="gc-c-activo"' + (item && !item.activo ? '' : ' checked') + '> Activo</label></div>' +
+          '<div class="campo"><label for="gc-c-obs">Observaciones</label><textarea class="textarea" id="gc-c-obs" rows="2">' + App.h(item ? item.observaciones : '') + '</textarea></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="gc-c-guardar">' + App.icono('check') + (esNuevo ? 'Crear cargo' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('gc-c-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('gc-c-guardar');
+        btn.disabled = true;
+        var datos = {
+          nombre: document.getElementById('gc-c-nombre').value,
+          areaId: document.getElementById('gc-c-area').value,
+          ordenJerarquico: Number(document.getElementById('gc-c-orden').value || 0),
+          descripcion: document.getElementById('gc-c-desc').value,
+          activo: document.getElementById('gc-c-activo').checked,
+          observaciones: document.getElementById('gc-c-obs').value
+        };
+        App.pedir(esNuevo ? 'crearCargoV2' : 'actualizarCargoV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Cargo creado' : 'Cargo actualizado', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  function areaForm(item) {
+    return function () {
+      var esNuevo = !item;
+      var m = App.modal({
+        titulo: esNuevo ? 'Nueva área' : 'Editar área: ' + App.h(item.nombre),
+        cuerpo: '<div class="campo"><label for="gc-a-nombre">Nombre *</label><input class="input" id="gc-a-nombre" value="' + App.h(item ? item.nombre : '') + '"></div>' +
+          '<div class="campo"><label for="gc-a-orden">Orden</label><input class="input" id="gc-a-orden" type="number" value="' + (item ? item.orden : 0) + '"></div>' +
+          '<div class="campo"><label for="gc-a-desc">Descripción</label><textarea class="textarea" id="gc-a-desc" rows="2">' + App.h(item ? item.descripcion : '') + '</textarea></div>' +
+          '<div class="campo"><label><input type="checkbox" id="gc-a-activo"' + (item && !item.activo ? '' : ' checked') + '> Activo</label></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="gc-a-guardar">' + App.icono('check') + (esNuevo ? 'Crear área' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('gc-a-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('gc-a-guardar');
+        btn.disabled = true;
+        var datos = {
+          nombre: document.getElementById('gc-a-nombre').value,
+          orden: Number(document.getElementById('gc-a-orden').value || 0),
+          descripcion: document.getElementById('gc-a-desc').value,
+          activo: document.getElementById('gc-a-activo').checked
+        };
+        App.pedir(esNuevo ? 'crearAreaV2' : 'actualizarAreaV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Área creada' : 'Área actualizada', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  /* V3.4F: cierre de UN cargo específico (cargos múltiples — no se cierran
+     los demás al asignar; aquí se termina la relación puntual). */
+  function cerrarCargo() {
+    var optCargos = cargos.map(function (c) {
+      return '<option value="' + App.h(c.id) + '">' + App.h(c.nombre) + ' (' + App.h(c.area || '—') + ')</option>';
+    }).join('');
+    var m = App.modal({
+      titulo: 'Cerrar cargo de un voluntario',
+      cuerpo: '<div class="campo"><label for="gc-t2-vol">Voluntario N°</label><input class="input" id="gc-t2-vol" placeholder="Ej.: 3"></div>' +
+        '<div class="campo"><label for="gc-t2-cargo">Cargo a cerrar</label><select class="select" id="gc-t2-cargo"><option value="">— Selecciona —</option>' + optCargos + '</select></div>' +
+        '<div class="campo"><label for="gc-t2-fecha">Fecha de término (dd/mm/aaaa)</label><input class="input" id="gc-t2-fecha"></div>' +
+        '<div class="campo"><label for="gc-t2-obs">Observaciones</label><textarea class="textarea" id="gc-t2-obs" rows="2"></textarea></div>' +
+        '<div class="alerta alerta-info" role="status" style="margin-top:var(--esp-3)">' + App.icono('alerta') +
+        '<div>Solo se cierra el cargo indicado. Los otros cargos vigentes del voluntario se conservan (cargos múltiples, ROF-S Art. 58).</div></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="gc-t2-guardar">' + App.icono('check') + 'Cerrar cargo</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('gc-t2-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('gc-t2-guardar');
+      var vol = document.getElementById('gc-t2-vol').value.trim();
+      var cargoId = document.getElementById('gc-t2-cargo').value;
+      if (!vol || !cargoId) { App.toast('Indica el N° de voluntario y el cargo', 'aviso'); return; }
+      btn.disabled = true;
+      App.pedir('terminarCargoVoluntarioV2', [vol, cargoId, {
+        fechaHasta: document.getElementById('gc-t2-fecha').value,
+        observaciones: document.getElementById('gc-t2-obs').value
+      }]).then(function (res) {
+        m.cerrar();
+        App.toast(res && res.yaCerrado ? 'El cargo ya no estaba vigente' : 'Cargo cerrado', res && res.yaCerrado ? 'aviso' : 'ok');
+        App.trasCambio();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo cerrar el cargo', 'error');
+      });
+    });
+  }
+
+  function asignarCargo(item) {
+    var m = App.modal({
+      titulo: 'Asignar cargo a un voluntario',
+      cuerpo: '<div class="campo"><label for="gc-a2-vol">Voluntario N°</label><input class="input" id="gc-a2-vol" placeholder="Ej.: 3"></div>' +
+        '<div class="campo"><label for="gc-a2-fecha">Fecha desde (dd/mm/aaaa)</label><input class="input" id="gc-a2-fecha"></div>' +
+        '<div class="campo"><label for="gc-a2-resolucion">Resolución</label><input class="input" id="gc-a2-resolucion"></div>' +
+        '<div class="campo"><label for="gc-a2-quien">Quién asigna</label><input class="input" id="gc-a2-quien"></div>' +
+        '<div class="campo"><label for="gc-a2-obs">Observaciones</label><textarea class="textarea" id="gc-a2-obs" rows="2"></textarea></div>' +
+        '<div class="alerta alerta-info" role="status" style="margin-top:var(--esp-3)">' + App.icono('alerta') +
+        '<div>Se asignará el cargo <strong>' + App.h(item.nombre) + '</strong> (área ' + App.h(item.area || '—') + '). Los cargos pueden coexistir: el voluntario puede tener más de un cargo vigente a la vez (V3.4F).</div></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="gc-a2-guardar">' + App.icono('check') + 'Asignar cargo</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('gc-a2-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('gc-a2-guardar');
+      var vol = document.getElementById('gc-a2-vol').value.trim();
+      if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
+      btn.disabled = true;
+      App.pedir('asignarCargoV2', [vol, item.id, {
+        fechaDesde: document.getElementById('gc-a2-fecha').value,
+        resolucion: document.getElementById('gc-a2-resolucion').value,
+        quienAsigno: document.getElementById('gc-a2-quien').value,
+        observaciones: document.getElementById('gc-a2-obs').value
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Cargo asignado', 'ok');
+        App.trasCambio();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo asignar el cargo', 'error');
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('grados', GradosCargosModule);</script>
