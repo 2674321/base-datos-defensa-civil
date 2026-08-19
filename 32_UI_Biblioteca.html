@@ -1,0 +1,239 @@
+<script>/* ============ PÁGINA: BIBLIOTECA INSTITUCIONAL (V3.4F, solo lectura) ============
+   Repositorio de la sede agrupado en 6 secciones (spec §21):
+   1) Grados y Distintivos · 2) Especialidades y Parches · 3) Subespecialidades
+   4) Unidades · 5) Formación y Acreditaciones · 6) Reglamentos y Documentos.
+   Las secciones 1–4 son ELEMENTOS (metadata vía App.meta, imagen vía
+   App.patch con placeholder si no existe — NUNCA imagen rota). Las secciones
+   5–6 son documentos administrativos (badges Disponible/Próximamente, sin
+   inventar normativa). Cada elemento abre una ficha: nombre, tipo, origen,
+   área, especialidad, subespecialidad, unidad, grado, descripción, imagen,
+   requisitos (solo los conocidos) y relaciones.
+   V3.4F: Jefe de Sede = DISTINTIVO (cargo/condición de mando, NO grado);
+   se ordena entre Instructor Mayor y Comandante Local; SCI (RECONOCIDA) se
+   agrega a Especialidades y Parches. */
+
+var BibliotecaModule = (function () {
+  'use strict';
+  var cont = null;
+  var consulta = '';
+
+  var SECCIONES = [
+    {
+      nombre: 'Grados',
+      icono: 'usuario',
+      tipo: 'GRADO',
+      descripcion: 'Grados jerárquicos de la sede y distintivos institucionales.',
+      // V3.4F: jerarquía visual — Jefe de Sede (distintivo/cargo de mando)
+      // entre Instructor Mayor y Comandante Local; NO es grado.
+      // V3.4G: se eliminó 'Radioaficionado CA2OPX' — el indicativo es dato
+      // personal de la credencial, no del catálogo institucional.
+      elementos: ['Comandante Local', 'Jefe de Sede', 'Instructor Mayor', 'Instructor', 'Sub Instructor', 'Voluntario Mayor', 'Voluntario']
+    },
+    {
+      nombre: 'Especialidades y Parches',
+      icono: 'paquete',
+      tipo: 'ESPECIALIDAD',
+      descripcion: 'Especialidades oficiales de la sede y sus parches.',
+      elementos: ['Auxiliar de Sanidad', 'Telecomunicaciones', 'Administrador de Albergues', 'Administrador de Centros de Acopio', 'Operador de Equipos Logísticos', 'Operador RPAS', 'Sistema de Comando de Incidentes (SCI)']
+    },
+    {
+      nombre: 'Subespecialidades',
+      icono: 'historial',
+      tipo: 'SUBESPECIALIDAD',
+      descripcion: 'Habilitaciones dentro de una especialidad (niveles SCI/radioaficionado viven en la especialidad, no como subespecialidades).',
+      elementos: ['Radioaficionado', 'Stop The Bleed']
+    },
+    {
+      nombre: 'Unidades',
+      icono: 'voluntarios',
+      tipo: 'UNIDAD',
+      descripcion: 'Unidades internas de la sede.',
+      elementos: ['Fuerza de Tarea Delta', 'Operadores RPA', 'Grupo de Rescate Animal']
+    },
+    {
+      nombre: 'Formación y Acreditaciones',
+      icono: 'documento',
+      descripcion: 'Manuales y material de apoyo de los cursos y especialidades.',
+      items: [
+        { titulo: 'Manual de primeros auxilios', detalle: 'Material de apoyo del curso de primeros auxilios.', estado: 'Disponible' },
+        { titulo: 'Apuntes de sanidad (nivel TENS)', detalle: 'Resumen de contenidos de la formación de sanidad.', estado: 'Próximamente' },
+        { titulo: 'Guía de radioaficionado (novicio)', detalle: 'Preparación para el examen de licencia de radioaficionado.', estado: 'Próximamente' },
+        { titulo: 'Manual de operación RPAS', detalle: 'Operación segura de aeronaves no tripuladas (DGAC).', estado: 'Próximamente' }
+      ]
+    },
+    {
+      nombre: 'Reglamentos y Documentos',
+      icono: 'documento',
+      descripcion: 'Reglamentos, procedimientos y formularios de la sede.',
+      items: [
+        { titulo: 'Reglamento interno de la sede', detalle: 'Deberes, derechos y normas de convivencia de los voluntarios.', estado: 'Disponible' },
+        { titulo: 'Reglamento Orgánico y de Funcionamiento (ROF-S)', detalle: 'Organización interna, cargos y funcionamiento de la sede.', estado: 'Disponible' },
+        { titulo: 'Estatutos de Defensa Civil de Chile', detalle: 'Texto oficial de los estatutos institucionales.', estado: 'Próximamente' },
+        { titulo: 'Procedimiento de entrega de equipamiento', detalle: 'Normas de cargo, uso, cuidado y devolución de equipamiento.', estado: 'Disponible' },
+        { titulo: 'Acta de entrega de equipamiento', detalle: 'Formato oficial del acta de entrega de cargo.', estado: 'Disponible' },
+        { titulo: 'Solicitud de ingreso de voluntarios', detalle: 'Formulario de postulación para nuevos voluntarios.', estado: 'Disponible' }
+      ]
+    }
+  ];
+
+  var TIPOS_LABEL = { GRADO: 'Grado', ESPECIALIDAD: 'Especialidad', SUBESPECIALIDAD: 'Subespecialidad', UNIDAD: 'Unidad', DISTINTIVO: 'Distintivo' };
+  // V3.4F: RECONOCIDA (SCI) se mostraba como info — V3.4H: SCI pasó a INTERNA
+  // (ya no hay elementos RECONOCIDA en el catálogo); CARGO (Jefe de Sede) no es
+  // un "origen" — se presenta como Condición en la ficha y badge en la tarjeta.
+  var ORIGEN_CLASE = { OFICIAL: 'ok', INTERNO: 'info', EXTERNO: 'aviso' };
+  var CARGO_CONDICION = 'Cargo/condición de mando';
+
+  function cargar() {
+    render();
+  }
+
+  function estadoItem(item) {
+    return item.estado === 'Disponible'
+      ? '<span class="badge badge-ok">' + App.icono('check') + ' Disponible</span>'
+      : '<span class="badge badge-neutro">' + App.icono('punto') + ' Próximamente</span>';
+  }
+
+  function fichaElemento(nombre) {
+    var m = App.meta(nombre) || {};
+    var filas = [];
+    var campos = [
+      ['Tipo', TIPOS_LABEL[m.tipo] || m.tipo],
+      // V3.4F: 'CARGO' no es un origen: se presenta como condición de mando.
+      ['Condición', m.origen === 'CARGO' ? CARGO_CONDICION : ''],
+      ['Origen', (m.origen && m.origen !== 'CARGO') ? '<span class="badge badge-' + (ORIGEN_CLASE[m.origen] || 'neutro') + '">' + App.h(m.origen) + '</span>' : ''],
+      ['Área', m.area],
+      ['Especialidad', m.especialidad],
+      ['Subespecialidad', m.subespecialidad],
+      ['Unidad', m.unidad],
+      ['Grado', m.grado],
+      ['Niveles', m.niveles]
+    ];
+    for (var i = 0; i < campos.length; i++) {
+      if (campos[i][1]) filas.push('<tr><td class="fuerte">' + App.h(campos[i][0]) + '</td><td>' + campos[i][1] + '</td></tr>');
+    }
+    var cuerpo =
+      '<div style="display:flex;gap:var(--esp-4);align-items:flex-start;flex-wrap:wrap">' +
+      App.patch(nombre, m.nombre || nombre) +
+      '<div style="flex:1;min-width:220px">' +
+      '<h3 class="page-titulo" style="font-size:1.05rem;margin:0 0 var(--esp-2)">' + App.h(m.nombre || nombre) + '</h3>' +
+      '<p class="texto-dim" style="margin:0 0 var(--esp-3)">' + App.h(m.descripcion || 'Sin descripción registrada.') + '</p>' +
+      '</div></div>' +
+      '<div class="tabla-wrap" style="margin-top:var(--esp-3)"><table class="tabla"><tbody>' + filas.join('') + '</tbody></table></div>';
+    App.modal({
+      titulo: TIPOS_LABEL[m.tipo] || 'Elemento',
+      cuerpo: cuerpo,
+      acciones: '<button class="btn btn-primario" data-cerrar-form="1">Cerrar</button>'
+    });
+  }
+
+  function tarjetaElemento(sec, nombre, rejilla) {
+    var m = App.meta(nombre) || { nombre: nombre, tipo: sec.tipo };
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cuerpo" style="text-align:center">' +
+      App.patch(nombre, m.nombre || nombre) +
+      '<div class="fuerte" style="margin-top:var(--esp-2)">' + App.h(m.nombre || nombre) + '</div>' +
+      (m.origen === 'CARGO' ? '<span class="badge badge-aviso" style="margin-top:var(--esp-1)">' + App.icono('alerta') + ' ' + App.h(CARGO_CONDICION) + '</span>' : '') +
+      (m.origen && m.origen !== 'CARGO' ? '<span class="badge badge-' + (ORIGEN_CLASE[m.origen] || 'neutro') + '" style="margin-top:var(--esp-1)">' + App.h(m.origen) + '</span>' : '') +
+      '<div class="texto-dim" style="margin-top:var(--esp-2);font-size:.85rem">' + App.h(m.descripcion || '') + '</div>' +
+      '<div style="margin-top:var(--esp-3)"><button class="btn btn-secundario" data-ficha="' + App.h(nombre) + '">' + App.icono('ver') + ' Ficha</button></div>' +
+      '</div>';
+    card.querySelector('[data-ficha]').addEventListener('click', function () {
+      fichaElemento(nombre);
+    });
+    rejilla.appendChild(card);
+  }
+
+  function pintarSecciones(rejilla) {
+    var hayResultados = false;
+    SECCIONES.forEach(function (sec) {
+      var coincide = function (texto) {
+        if (!consulta) return true;
+        return String(texto || '').toLowerCase().indexOf(consulta) >= 0;
+      };
+      var elementos = (sec.elementos || []).filter(function (nom) {
+        var m = App.meta(nom) || {};
+        return coincide(nom + ' ' + sec.nombre + ' ' + sec.descripcion + ' ' + (m.especialidad || '') + ' ' + (m.subespecialidad || '') + ' ' + (m.unidad || '') + ' ' + (m.descripcion || ''));
+      });
+      var items = (sec.items || []).filter(function (it) {
+        return coincide(it.titulo + ' ' + it.detalle + ' ' + sec.nombre);
+      });
+      if (!elementos.length && !items.length) return;
+      hayResultados = true;
+
+      var card = document.createElement('div');
+      card.className = 'card';
+      var cabecera = '<div class="card-cabecera"><strong>' + App.icono(sec.icono) + ' ' + App.h(sec.nombre) + '</strong>' +
+        '<span class="texto-dim" style="font-weight:400;font-size:.8rem">' + App.h(sec.descripcion) + '</span></div>';
+
+      if (sec.elementos) {
+        card.innerHTML = cabecera;
+        var rejillaE = document.createElement('div');
+        rejillaE.className = 'rejilla-2';
+        rejillaE.style.padding = 'var(--esp-3)';
+        elementos.forEach(function (nom) { tarjetaElemento(sec, nom, rejillaE); });
+        card.appendChild(rejillaE);
+      } else {
+        card.innerHTML = cabecera +
+          '<div class="card-cuerpo sin-pad"><div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+          '<th>Documento</th><th>Descripción</th><th>Estado</th>' +
+          '</tr></thead><tbody>' +
+          (items.length
+            ? items.map(function (it) {
+                return '<tr>' +
+                  '<td class="fuerte">' + App.icono('documento') + ' ' + App.h(it.titulo) + '</td>' +
+                  '<td class="texto-dim">' + App.h(it.detalle) + '</td>' +
+                  '<td>' + estadoItem(it) + '</td>' +
+                  '</tr>';
+              }).join('')
+            : '<tr><td colspan="3" class="texto-dim">Sin documentos para la búsqueda en esta sección.</td></tr>') +
+          '</tbody></table></div></div>';
+      }
+      rejilla.appendChild(card);
+    });
+    if (!hayResultados) {
+      rejilla.innerHTML = '<div class="card"><div class="card-cuerpo">' +
+        App.alerta('info', '<strong>Sin resultados.</strong> No hay elementos que coincidan con "' + App.h(consulta) + '".') +
+        '</div></div>';
+    }
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Biblioteca Institucional</h1>' +
+      '<p class="page-sub">Grados, especialidades, subespecialidades, unidades, formación y reglamentos de la sede</p></div>';
+    cont.appendChild(cabecera);
+
+    var filtro = document.createElement('div');
+    filtro.className = 'card';
+    filtro.innerHTML =
+      '<div class="card-cuerpo" style="display:flex;gap:var(--esp-3);align-items:center;flex-wrap:wrap">' +
+      '<label class="texto-dim" for="bib-buscar" style="flex-shrink:0">Buscar:</label>' +
+      '<input class="entrada" id="bib-buscar" placeholder="Nombre, sección, descripción…" style="flex:1;min-width:220px;max-width:420px"></div>';
+    cont.appendChild(filtro);
+
+    var rejilla = document.createElement('div');
+    rejilla.className = 'rejilla-1';
+    cont.appendChild(rejilla);
+    pintarSecciones(rejilla);
+
+    var input = document.getElementById('bib-buscar');
+    input.addEventListener('input', function () {
+      consulta = input.value.trim().toLowerCase();
+      pintarSecciones(rejilla);
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('biblioteca', BibliotecaModule);</script>

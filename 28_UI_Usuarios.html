@@ -1,0 +1,206 @@
+<script>/* ============ PÁGINA: USUARIOS Y PERMISOS (V2) ============
+   Usuarios con perfil + excepciones de permisos sobre la matriz base
+   (backend 33_Usuarios.js). */
+
+var UsuariosModule = (function () {
+  'use strict';
+  var cont = null;
+  var usuarios = [];
+  var permisos = [];
+  var perfiles = [];
+  var pestaña = 'usuarios';
+
+  function cargar() {
+    App.pedir('listarPerfilesV2').then(function (res) { perfiles = (res || []).map(function (p) { return p.nombre; }); })
+      .catch(function () { perfiles = []; })
+      .then(function () { return App.pedir('listarUsuariosV2'); })
+      .then(function (res) { usuarios = res || []; })
+      .catch(function () { usuarios = []; })
+      .then(function () { return App.pedir('listarPermisosV2'); })
+      .then(function (res) { permisos = res || []; render(); })
+      .catch(function () { permisos = []; render(); });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Usuarios</h1>' +
+      '<p class="page-sub">Usuarios de la Web App con perfil y excepciones de permisos</p></div>';
+    cont.appendChild(cabecera);
+
+    var tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    tabs.innerHTML =
+      '<button class="tab" data-tab="usuarios">Usuarios (' + usuarios.length + ')</button>' +
+      '<button class="tab" data-tab="permisos">Excepciones de permisos (' + permisos.length + ')</button>';
+    cont.appendChild(tabs);
+    tabs.querySelectorAll('.tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        pestaña = b.getAttribute('data-tab');
+        tabs.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('activa'); });
+        b.classList.add('activa');
+        pintar();
+      });
+    });
+    pintar();
+  }
+
+  function pintar() {
+    var anterior = cont.querySelector('.card');
+    if (anterior) anterior.remove();
+    var card = document.createElement('div');
+    card.className = 'card';
+    cont.appendChild(card);
+
+    if (pestaña === 'usuarios') {
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Usuarios</strong>' +
+        '<button class="btn btn-primario" id="us-nuevo">' + App.icono('mas') + 'Nuevo usuario</button></div>' +
+        '<div class="card-cuerpo sin-pad">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Correo</th><th>Perfil</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+        usuarios.map(function (u) {
+          return '<tr><td class="fuerte">' + App.h(u.correo) + '</td>' +
+            '<td>' + App.h(u.perfil) + '</td>' +
+            '<td>' + App.badge(u.activo ? 'Activo' : 'Inactivo', u.activo ? 'ok' : 'gris') + '</td>' +
+            '<td><div class="acciones"><button class="btn-icono" data-us-edit="' + App.h(u.id) + '" title="Editar" aria-label="Editar">' + App.icono('editar') + '</button></div></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+      document.getElementById('us-nuevo').addEventListener('click', formUsuario(null));
+      card.querySelectorAll('[data-us-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = usuarios.find(function (u) { return u.id === this.getAttribute('data-us-edit'); }, b);
+          if (item) formUsuario(item)();
+        });
+      });
+      return;
+    }
+
+    card.innerHTML =
+      '<div class="card-cabecera"><strong>Excepciones de permisos</strong>' +
+      '<button class="btn btn-primario" id="us-perm-nuevo">' + App.icono('mas') + 'Nueva excepción</button></div>' +
+      '<div class="card-cuerpo sin-pad">' +
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Perfil</th><th>Módulo</th><th>Acción</th><th>Efecto</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+      permisos.map(function (p) {
+        return '<tr><td class="fuerte">' + App.h(p.perfil) + '</td>' +
+          '<td>' + App.h(p.modulo) + '</td>' +
+          '<td>' + App.h(p.accion) + '</td>' +
+          '<td>' + (p.activo ? App.badge('Otorga', 'ok') : App.badge('Revoca', 'rojo')) + '</td>' +
+          '<td><div class="acciones">' +
+          '<button class="btn-icono" data-perm-toggle="' + App.h(p.id) + '" title="Cambiar efecto" aria-label="Cambiar efecto">' + App.icono('editar') + '</button>' +
+          '<button class="btn-icono btn-icono-rojo" data-perm-del="' + App.h(p.id) + '" title="Revocar" aria-label="Revocar">' + App.icono('x') + '</button>' +
+          '</div></td></tr>';
+      }).join('') +
+      '</tbody></table></div></div>';
+    document.getElementById('us-perm-nuevo').addEventListener('click', formPermiso);
+    card.querySelectorAll('[data-perm-toggle]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-perm-toggle');
+        var item = permisos.find(function (p) { return p.id === id; });
+        if (!item) return;
+        App.pedir('actualizarPermisoV2', [id, { activo: !item.activo }]).then(function () {
+          App.toast('Efecto cambiado', 'ok');
+          cargar();
+        }).catch(function (err) { App.toast(err.message || 'No se pudo cambiar', 'error'); });
+      });
+    });
+    card.querySelectorAll('[data-perm-del]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-perm-del');
+        App.confirmar({ titulo: 'Revocar excepción', mensaje: 'Esta acción no eliminará el registro histórico. La excepción quedará revocada y permanecerá disponible en el historial.', confirmar: 'Revocar', tipo: 'peligro' }).then(function (si) {
+          if (!si) return;
+          App.pedir('eliminarPermisoV2', [id]).then(function () {
+            App.toast('Excepción revocada', 'ok');
+            cargar();
+          }).catch(function (err) { App.toast(err.message || 'No se pudo revocar', 'error'); });
+        });
+      });
+    });
+  }
+
+  function optPerfiles(seleccionado) {
+    return perfiles.map(function (p) {
+      return '<option' + (p === seleccionado ? ' selected' : '') + '>' + App.h(p) + '</option>';
+    }).join('');
+  }
+
+  function formUsuario(item) {
+    return function () {
+      var esNuevo = !item;
+      var m = App.modal({
+        titulo: esNuevo ? 'Nuevo usuario' : 'Editar usuario: ' + App.h(item.correo),
+        cuerpo: '<div class="campo"><label for="us-f-correo">Correo *</label><input class="input" id="us-f-correo" type="email" value="' + App.h(item ? item.correo : '') + '"></div>' +
+          '<div class="campo"><label for="us-f-perfil">Perfil</label><select class="select" id="us-f-perfil">' + optPerfiles(item ? item.perfil : '') + '</select></div>' +
+          '<div class="campo"><label><input type="checkbox" id="us-f-activo"' + (item && !item.activo ? '' : ' checked') + '> Activo</label></div>' +
+          '<div class="campo"><label for="us-f-obs">Observaciones</label><textarea class="textarea" id="us-f-obs" rows="2">' + App.h(item ? item.observaciones : '') + '</textarea></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="us-f-guardar">' + App.icono('check') + (esNuevo ? 'Crear usuario' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('us-f-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('us-f-guardar');
+        btn.disabled = true;
+        var datos = {
+          correo: document.getElementById('us-f-correo').value,
+          perfil: document.getElementById('us-f-perfil').value,
+          activo: document.getElementById('us-f-activo').checked,
+          observaciones: document.getElementById('us-f-obs').value
+        };
+        App.pedir(esNuevo ? 'crearUsuarioV2' : 'actualizarUsuarioV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Usuario creado' : 'Usuario actualizado', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  function formPermiso() {
+    var m = App.modal({
+      titulo: 'Nueva excepción de permiso',
+      cuerpo: '<div class="campo"><label for="us-p-perfil">Perfil</label><select class="select" id="us-p-perfil">' + optPerfiles('') + '</select></div>' +
+        '<div class="campo-fila">' +
+        '<div class="campo"><label for="us-p-modulo">Módulo</label><input class="input" id="us-p-modulo" placeholder="Ej.: voluntarios, credenciales"></div>' +
+        '<div class="campo"><label for="us-p-accion">Acción</label><input class="input" id="us-p-accion" placeholder="Ej.: crear, eliminar"></div></div>' +
+        '<div class="campo"><label for="us-p-efecto">Efecto</label><select class="select" id="us-p-efecto">' +
+        '<option value="true">Otorga (permite aunque la matriz no lo dé)</option>' +
+        '<option value="false">Revoca (bloquea aunque la matriz lo dé)</option></select></div>' +
+        '<div class="campo"><label for="us-p-obs">Observaciones</label><textarea class="textarea" id="us-p-obs" rows="2"></textarea></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="us-p-guardar">' + App.icono('check') + 'Agregar excepción</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('us-p-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('us-p-guardar');
+      btn.disabled = true;
+      App.pedir('agregarPermisoV2', [{
+        perfil: document.getElementById('us-p-perfil').value,
+        modulo: document.getElementById('us-p-modulo').value,
+        accion: document.getElementById('us-p-accion').value,
+        activo: document.getElementById('us-p-efecto').value === 'true',
+        observaciones: document.getElementById('us-p-obs').value
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Excepción agregada', 'ok');
+        cargar();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo agregar', 'error');
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('usuarios', UsuariosModule);</script>

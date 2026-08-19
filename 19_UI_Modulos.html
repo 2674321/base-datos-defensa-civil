@@ -1,0 +1,565 @@
+<script>/* ============ PÁGINAS: SERVICIOS · ASISTENCIA · HISTORIAL · CONFIGURACIÓN ============
+   Servicios y Asistencia: implementación V2 completa (backend 27_Servicios.js / 28_Asistencia.js).
+   Historial: timeline global del Log con filtros. Configuración: solo lectura. */
+
+var ServiciosModule = (function () {
+  'use strict';
+  var cont = null;
+  var lista = [];
+  var tipos = [];
+  var estadoFiltro = '';
+
+  function cargar() {
+    App.pedir('listarServiciosV2').then(function (res) { lista = res || []; pintar(); })
+      .catch(function (err) {
+        var cuerpo = cont.querySelector('#serv-cuerpo');
+        if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar los servicios.</strong> ' + App.h(err.message || err));
+      });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Servicios</h1>' +
+      '<p class="page-sub">Operaciones y actividades de la sede (tipos configurables)</p></div>' +
+      '<div class="page-acciones"><button class="btn btn-primario" id="serv-nuevo">' + App.icono('mas') + 'Nuevo servicio</button></div>';
+    cont.appendChild(cabecera);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cabecera">' +
+      '<select class="select" id="serv-filtro" style="width:auto" aria-label="Filtrar por estado">' +
+      '<option value="">Todos los estados</option><option>Planificado</option><option>Activo</option><option>Finalizado</option><option>Cancelado</option>' +
+      '</select><span class="texto-dim" id="serv-total"></span></div>' +
+      '<div class="card-cuerpo sin-pad" id="serv-cuerpo"></div>';
+    cont.appendChild(card);
+
+    document.getElementById('serv-nuevo').addEventListener('click', abrirNuevo);
+    document.getElementById('serv-filtro').addEventListener('change', function () {
+      estadoFiltro = this.value;
+      pintar();
+    });
+    pintar();
+  }
+
+  function pintar() {
+    var cuerpo = document.getElementById('serv-cuerpo');
+    if (!cuerpo) return;
+    var total = document.getElementById('serv-total');
+    var filtrados = estadoFiltro ? lista.filter(function (s) { return s.estado === estadoFiltro; }) : lista;
+    if (total) total.textContent = filtrados.length + (filtrados.length === 1 ? ' servicio' : ' servicios');
+    if (!filtrados.length) {
+      cuerpo.innerHTML = App.empty('servicios', 'Sin servicios', 'Crea el primer servicio con el botón "Nuevo servicio".');
+      return;
+    }
+    var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>Fecha</th><th>Tipo</th><th>Nombre</th><th>Lugar</th><th>Asignados</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>';
+    for (var i = 0; i < filtrados.length; i++) {
+      var s = filtrados[i];
+      var badgeEstado = { 'Planificado': 'info', 'Activo': 'ok', 'Finalizado': 'gris', 'Cancelado': 'aviso' }[s.estado] || 'neutro';
+      html += '<tr>' +
+        '<td class="num">' + App.h(s.fecha || '—') + '</td>' +
+        '<td>' + App.h(s.tipo || '—') + '</td>' +
+        '<td class="fuerte">' + App.h(s.nombre || '—') + '</td>' +
+        '<td>' + App.h(s.lugar || '—') + '</td>' +
+        '<td class="num">' + (s.asignados || 0) + '</td>' +
+        '<td>' + App.badge(s.estado, badgeEstado) + '</td>' +
+        '<td><div class="acciones"><button class="btn-icono" data-detalle="' + App.h(s.id) + '" title="Ver detalle" aria-label="Ver detalle">' + App.icono('documento') + '</button></div></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    cuerpo.innerHTML = html;
+    cuerpo.querySelectorAll('[data-detalle]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = filtrados.find(function (s) { return s.id === this.getAttribute('data-detalle'); }, b);
+        if (item) abrirDetalle(item);
+      });
+    });
+  }
+
+  function formulario() {
+    var optTipos = tipos.map(function (t) {
+      return '<option value="' + App.h(t.id) + '">' + App.h(t.nombre) + '</option>';
+    }).join('');
+    return '<div class="campo-fila">' +
+      '<div class="campo"><label for="serv-tipo">Tipo de servicio *</label><select class="select" id="serv-tipo">' + optTipos + '</select></div>' +
+      '<div class="campo"><label for="serv-fecha">Fecha (dd/mm/aaaa)</label><input class="input" id="serv-fecha" placeholder="dd/mm/aaaa"></div></div>' +
+      '<div class="campo"><label for="serv-nombre">Nombre</label><input class="input" id="serv-nombre" placeholder="Ej.: Operativo fiestas patrias"></div>' +
+      '<div class="campo"><label for="serv-desc">Descripción</label><textarea class="textarea" id="serv-desc" rows="2"></textarea></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="serv-hini">Horario inicio</label><input class="input" id="serv-hini" placeholder="09:00"></div>' +
+      '<div class="campo"><label for="serv-hfin">Horario fin</label><input class="input" id="serv-hfin" placeholder="18:00"></div></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="serv-lugar">Lugar</label><input class="input" id="serv-lugar"></div>' +
+      '<div class="campo"><label for="serv-comuna">Comuna</label><input class="input" id="serv-comuna"></div></div>' +
+      '<div class="campo"><label for="serv-resp">Responsable (voluntario ID)</label><input class="input" id="serv-resp" placeholder="Opcional"></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label><input type="checkbox" id="serv-ali"> Alimentación</label></div>' +
+      '<div class="campo"><label><input type="checkbox" id="serv-agua"> Agua</label></div>' +
+      '<div class="campo"><label><input type="checkbox" id="serv-aloj"> Alojamiento</label></div>' +
+      '<div class="campo"><label><input type="checkbox" id="serv-trans"> Transporte</label></div>' +
+      '<div class="campo"><label><input type="checkbox" id="serv-apoyo"> Apoyo logístico</label></div></div>' +
+      '<div class="campo"><label for="serv-estado">Estado</label><select class="select" id="serv-estado">' +
+      ['Planificado', 'Activo', 'Finalizado', 'Cancelado'].map(function (e) {
+        return '<option' + (e === 'Planificado' ? ' selected' : '') + '>' + e + '</option>';
+      }).join('') + '</select></div>';
+  }
+
+  function abrirNuevo() {
+    var m = App.modal({
+      titulo: 'Nuevo servicio',
+      cuerpo: formulario(),
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="serv-guardar">' + App.icono('check') + 'Crear servicio</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('serv-guardar').addEventListener('click', function () { guardar(null, m); });
+  }
+
+  function guardar(id, m) {
+    var datos = {
+      tipoServicioId: document.getElementById('serv-tipo').value,
+      nombre: document.getElementById('serv-nombre').value.trim(),
+      descripcion: document.getElementById('serv-desc').value.trim(),
+      fecha: document.getElementById('serv-fecha').value.trim(),
+      horarioInicio: document.getElementById('serv-hini').value.trim(),
+      horarioFin: document.getElementById('serv-hfin').value.trim(),
+      lugar: document.getElementById('serv-lugar').value.trim(),
+      comuna: document.getElementById('serv-comuna').value.trim(),
+      responsableId: document.getElementById('serv-resp').value.trim(),
+      alimentacion: document.getElementById('serv-ali').checked,
+      agua: document.getElementById('serv-agua').checked,
+      alojamiento: document.getElementById('serv-aloj').checked,
+      transporte: document.getElementById('serv-trans').checked,
+      apoyoLogistico: document.getElementById('serv-apoyo').checked,
+      estado: document.getElementById('serv-estado').value
+    };
+    var btn = document.getElementById('serv-guardar');
+    App.botonEstado(btn, 'procesando', 'Creando…');
+    App.pedir('crearServicioV2', [datos]).then(function () {
+      m.cerrar();
+      App.toast('Servicio creado', 'ok');
+      App.trasCambio();
+      cargar();
+    }).catch(function (err) {
+      App.botonEstado(btn, 'normal');
+      App.toast(err.message || 'No se pudo crear', 'error');
+    });
+  }
+
+  function abrirDetalle(item) {
+    App.pedir('obtenerServicioV2', [item.id]).then(function (d) {
+      var s = d.servicio;
+      var m = App.modal({
+        titulo: 'Servicio ' + s.id,
+        ancho: 'ancho',
+        cuerpo: '<div class="rejilla-2">' +
+          '<div class="stat-card"><span class="stat-ico">' + App.icono('servicios') + '</span><div><strong>' + App.h(s.tipo || '—') + '</strong><span class="stat-titulo">' + App.h(s.nombre || 'Sin nombre') + ' · ' + App.h(s.fecha || '—') + '</span></div></div>' +
+          '<div class="stat-card"><span class="stat-ico">' + App.icono('voluntarios') + '</span><div><strong>' + (s.responsableId ? 'Resp. N° ' + App.h(s.responsableId) : 'Sin responsable') + '</strong><span class="stat-titulo">' + App.h(s.lugar || '') + (s.comuna ? ' · ' + App.h(s.comuna) : '') + '</span></div></div>' +
+          '</div>' +
+          (s.descripcion ? '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cuerpo">' + App.h(s.descripcion) + '</div></div>' : '') +
+          '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cabecera"><strong>Asignados (' + (d.asignados || []).length + ')</strong>' +
+          '<button class="btn btn-primario" id="serv-asignar">' + App.icono('mas') + 'Asignar voluntarios</button></div>' +
+          '<div class="card-cuerpo sin-pad" id="serv-asignados"></div></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cerrar</button>' +
+          '<button class="btn btn-primario" data-estado="Activo"' + (s.estado === 'Activo' ? ' disabled' : '') + '>Activar</button>' +
+          '<button class="btn btn-primario" data-estado="Finalizado"' + (s.estado === 'Finalizado' ? ' disabled' : '') + '>Finalizar</button>' +
+          '<button class="btn btn-rojo" data-estado="Cancelado"' + (s.estado === 'Cancelado' || s.estado === 'Finalizado' ? ' disabled' : '') + '>Cancelar</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      pintarAsignados(d.asignados || []);
+      document.getElementById('serv-asignar').addEventListener('click', function () { abrirAsignacion(s.id, m); });
+      m.overlay.querySelectorAll('[data-estado]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (b.disabled) return;
+          App.pedir('cambiarEstadoServicioV2', [s.id, b.getAttribute('data-estado')]).then(function () {
+            App.toast('Estado actualizado a ' + b.getAttribute('data-estado'), 'ok');
+            App.trasCambio();
+            m.cerrar();
+            cargar();
+          }).catch(function (err) { App.toast(err.message || 'No se pudo cambiar el estado', 'error'); });
+        });
+      });
+    }).catch(function (err) {
+      App.toast(err.message || 'No se pudo cargar el servicio', 'error');
+    });
+  }
+
+  function pintarAsignados(asignados) {
+    var cuerpo = document.getElementById('serv-asignados');
+    if (!cuerpo) return;
+    if (!asignados.length) { cuerpo.innerHTML = App.empty('voluntarios', 'Sin asignados', 'Usa "Asignar voluntarios" para convocar al equipo.'); return; }
+    cuerpo.innerHTML = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Voluntario</th><th>Rol en servicio</th><th>Estado</th></tr></thead><tbody>' +
+      asignados.map(function (a) {
+        return '<tr><td class="fuerte">' + App.h(a.voluntario) + ' <span class="texto-dim">(' + App.h(a.voluntarioId) + ')</span></td>' +
+          '<td>' + App.h(a.rolEnServicio || '—') + '</td>' +
+          '<td>' + App.badge(a.estado, 'info') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function abrirAsignacion(servicioId, mPadre) {
+    App.pedir('listarPersonasV2').then(function (personas) {
+      var candidatos = (personas || []).filter(function (p) { return p.voluntarioId; });
+      if (!candidatos.length) { App.toast('No hay voluntarios V2 para asignar', 'aviso'); return; }
+      var m = App.modal({
+        titulo: 'Asignar voluntarios',
+        ancho: 'ancho',
+        cuerpo: '<div class="campo"><label for="serv-rol">Rol en servicio (todos)</label><input class="input" id="serv-rol" placeholder="Ej.: Apoyo logístico"></div>' +
+          '<div id="serv-checks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--esp-2)">' +
+          candidatos.map(function (p) {
+            return '<label style="display:flex;gap:var(--esp-2);align-items:center"><input type="checkbox" value="' + App.h(p.voluntarioId) + '"> ' + App.h(p.nombreCompleto) + ' <span class="texto-dim">(' + App.h(p.grado || '') + ')</span></label>';
+          }).join('') + '</div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="serv-asignar-guardar">' + App.icono('check') + 'Asignar seleccionados</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('serv-asignar-guardar').addEventListener('click', function () {
+        var ids = Array.prototype.map.call(document.querySelectorAll('#serv-checks input:checked'), function (c) { return c.value; });
+        if (!ids.length) { App.toast('Selecciona al menos un voluntario', 'aviso'); return; }
+        var btn = document.getElementById('serv-asignar-guardar');
+        App.botonEstado(btn, 'procesando', 'Asignando…');
+        App.pedir('asignarVoluntariosServicioV2', [servicioId, ids, { rolEnServicio: document.getElementById('serv-rol').value.trim(), asignadoPor: 'Web App' }])
+          .then(function (res) {
+            m.cerrar();
+            App.toast(res.creados + ' asignado(s)' + (res.omitidos && res.omitidos.length ? ' · omitidos: ' + res.omitidos.length : ''), 'ok');
+            App.trasCambio();
+            if (mPadre) mPadre.cerrar();
+            cargar();
+          }).catch(function (err) {
+            App.botonEstado(btn, 'normal');
+            App.toast(err.message || 'No se pudo asignar', 'error');
+          });
+      });
+    }).catch(function (err) { App.toast(err.message || 'No se pudo cargar la nómina', 'error'); });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      App.pedir('listarTiposServicioV2').then(function (res) { tipos = res || []; })
+        .catch(function () { tipos = []; })
+        .then(function () { render(); cargar(); });
+    }
+  };
+})();
+
+var AsistenciaModule = (function () {
+  'use strict';
+  var cont = null;
+  var servicios = [];
+  var estados = [];
+  var marcajes = [];
+  var servicioActual = null;
+
+  function cargarServicios() {
+    return App.pedir('listarServiciosV2').then(function (res) { servicios = res || []; });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Asistencia</h1>' +
+      '<p class="page-sub">Registro de presentes y ausentes por servicio (FUERZA TOTAL / FORMAN / FALTAN)</p></div>';
+    cont.appendChild(cabecera);
+
+    var sel = document.createElement('div');
+    sel.className = 'card';
+    sel.innerHTML =
+      '<div class="card-cabecera"><label for="as-servicio" style="font-weight:600">Servicio</label>' +
+      '<select class="select" id="as-servicio" style="flex:1;max-width:420px"><option value="">— Selecciona un servicio —</option></select>' +
+      '<button class="btn btn-secundario" id="as-cargar">' + App.icono('documento') + 'Cargar marcajes</button></div>' +
+      '<div class="card-cuerpo" id="as-resumen"></div>';
+    cont.appendChild(sel);
+
+    document.getElementById('as-servicio').innerHTML = '<option value="">— Selecciona un servicio —</option>' +
+      servicios.map(function (s) {
+        return '<option value="' + App.h(s.id) + '"' + (servicioActual && servicioActual.id === s.id ? ' selected' : '') + '>' +
+          App.h(s.fecha + ' · ' + (s.tipo || '') + (s.nombre ? ' — ' + s.nombre : '')) + ' [' + App.h(s.estado) + ']</option>';
+      }).join('');
+    document.getElementById('as-cargar').addEventListener('click', cargarMarcajes);
+    if (servicioActual) cargarMarcajes();
+    cargarEstadisticas();
+  }
+
+  function cargarMarcajes() {
+    var id = document.getElementById('as-servicio').value;
+    if (!id) { App.toast('Selecciona un servicio', 'aviso'); return; }
+    servicioActual = servicios.find(function (s) { return s.id === id; }) || null;
+    var cuerpo = document.getElementById('as-resumen');
+    App.cargando(cuerpo, true, 'Cargando marcajes…');
+    App.pedir('obtenerAsistenciaServicioV2', [id]).then(function (d) {
+      App.cargando(cuerpo, false);
+      pintarMarcaje(id, d);
+    }).catch(function (err) {
+      App.cargando(cuerpo, false);
+      cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar los marcajes.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function pintarMarcaje(servicioId, d) {
+    var cuerpo = document.getElementById('as-resumen');
+    var r = d.resumen;
+    var resumenHtml = '<div class="rejilla-2">' +
+      '<div class="stat-card"><span class="stat-ico info">' + App.icono('voluntarios') + '</span><div><strong>' + r.fuerzaTotal + '</strong><span class="stat-titulo">FUERZA TOTAL</span></div></div>' +
+      '<div class="stat-card"><span class="stat-ico ok">' + App.icono('check') + '</span><div><strong>' + r.forman + '</strong><span class="stat-titulo">FORMAN (presentes)</span></div></div>' +
+      '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('alerta') + '</span><div><strong>' + r.faltan + '</strong><span class="stat-titulo">FALTAN</span></div></div>' +
+      '<div class="stat-card"><span class="stat-ico neutro">' + App.icono('historial') + '</span><div><strong>' + (r.porEstado['Presente'] || 0) + '/' + r.fuerzaTotal + '</strong><span class="stat-titulo">Presentes / asignados</span></div></div>' +
+      '</div>';
+
+    var html = resumenHtml;
+    if (!d.registros.length) {
+      html += '<div style="margin-top:var(--esp-3)">' + App.alerta('info', '<strong>Sin marcajes aún.</strong> Asigna voluntarios al servicio (página Servicios) y regístralos aquí.') + '</div>';
+    } else {
+      html += '<div class="tabla-wrap" style="margin-top:var(--esp-3)"><table class="tabla"><thead><tr>' +
+        '<th>Voluntario</th><th>Tipo</th><th>Estado</th><th>Horas</th><th>Motivo</th></tr></thead><tbody>';
+      for (var i = 0; i < d.registros.length; i++) {
+        var x = d.registros[i];
+        html += '<tr><td class="fuerte">' + App.h(x.voluntario) + '</td>' +
+          '<td>' + App.h(x.tipoAsistencia) + '</td>' +
+          '<td>' + App.badge(x.estado, x.estado === 'Presente' ? 'ok' : (x.estado === 'Ausente' || x.estado === 'Ausente justificado' ? 'aviso' : 'neutro')) + '</td>' +
+          '<td class="num">' + (x.horas || '—') + '</td>' +
+          '<td class="aviso-fila">' + App.h(x.motivo || '') + '</td></tr>';
+      }
+      html += '</tbody></table></div>';
+    }
+    cuerpo.innerHTML = html;
+
+    var cuerpoMarcaje = document.createElement('div');
+    cuerpoMarcaje.className = 'card';
+    cuerpoMarcaje.style.marginTop = 'var(--esp-3)';
+    cuerpoMarcaje.innerHTML =
+      '<div class="card-cabecera"><strong>Marcar asistencia</strong>' +
+      '<button class="btn btn-primario" id="as-guardar">' + App.icono('check') + 'Guardar marcajes</button></div>' +
+      '<div class="card-cuerpo" id="as-marcaje"></div>';
+    cont.appendChild(cuerpoMarcaje);
+
+    var contMarcaje = document.getElementById('as-marcaje');
+    var asignados = [];
+    App.pedir('obtenerServicioV2', [servicioId]).then(function (det) {
+      asignados = det.asignados || [];
+      var filas = d.registros.length ? d.registros : asignados.map(function (a) {
+        return { id: null, voluntarioId: a.voluntarioId, voluntario: a.voluntario, tipoAsistencia: 'Operativa', estado: 'Asignado', horas: 0, motivo: '' };
+      });
+      var optEstados = estados.map(function (e) { return '<option>' + App.h(e.nombre) + '</option>'; }).join('');
+      var optTipos = ['Operativa', 'Régimen e instrucción'].map(function (t) { return '<option>' + t + '</option>'; }).join('');
+      contMarcaje.innerHTML = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+        '<th>Voluntario</th><th>Tipo</th><th>Estado</th><th>Horas</th><th>Motivo</th></tr></thead><tbody>' +
+        filas.map(function (f) {
+          return '<tr>' +
+            '<td class="fuerte">' + App.h(f.voluntario) + '</td>' +
+            '<td><select class="select as-tipo" style="width:auto">' + optTipos.replace(new RegExp('>' + App.h(f.tipoAsistencia) + '<'), ' selected>' + App.h(f.tipoAsistencia) + '<') + '</select></td>' +
+            '<td><select class="select as-estado" style="width:auto">' + optEstados.replace(new RegExp('>' + App.h(f.estado) + '<'), ' selected>' + App.h(f.estado) + '<') + '</select></td>' +
+            '<td><input class="input as-horas" type="number" min="0" step="0.5" value="' + (f.horas || 0) + '" style="width:70px"></td>' +
+            '<td><input class="input as-motivo" placeholder="Opcional" value="' + App.h(f.motivo || '') + '"></td></tr>';
+        }).join('') + '</tbody></table></div>';
+      marcajes = filas;
+    }).catch(function (err) {
+      contMarcaje.innerHTML = App.alerta('critica', '<strong>No se pudo cargar la lista.</strong> ' + App.h(err.message || err));
+    });
+
+    document.getElementById('as-guardar').addEventListener('click', function () {
+      var filas = contMarcaje.querySelectorAll('tr');
+      var registros = [];
+      var filasData = marcajes || [];
+      Array.prototype.forEach.call(filas, function (tr, idx) {
+        var f = filasData[idx];
+        if (!f) return;
+        var selTipo = tr.querySelector('.as-tipo');
+        var selEstado = tr.querySelector('.as-estado');
+        var inpHoras = tr.querySelector('.as-horas');
+        var inpMotivo = tr.querySelector('.as-motivo');
+        if (!selTipo || !selEstado) return;
+        registros.push({
+          voluntarioId: f.voluntarioId,
+          tipoAsistencia: selTipo.value,
+          estado: selEstado.value,
+          horas: Number(inpHoras.value || 0),
+          motivo: inpMotivo.value.trim()
+        });
+      });
+      if (!registros.length) { App.toast('No hay marcajes que guardar', 'aviso'); return; }
+      var btn = document.getElementById('as-guardar');
+      App.botonEstado(btn, 'procesando', 'Guardando…');
+      App.pedir('registrarAsistenciaV2', [servicioId, registros]).then(function () {
+        App.botonEstado(btn, 'normal');
+        App.toast('Asistencia guardada', 'ok');
+        App.trasCambio();
+        cargarMarcajes();
+      }).catch(function (err) {
+        App.botonEstado(btn, 'normal');
+        App.toast(err.message || 'No se pudo guardar la asistencia', 'error');
+      });
+    });
+  }
+
+  function cargarEstadisticas() {
+    App.pedir('obtenerEstadisticasAsistenciaV2', [{}]).then(function (d) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.style.marginTop = 'var(--esp-3)';
+      card.innerHTML = '<div class="card-cabecera"><strong>Estadísticas ' + d.anio + '</strong>' +
+        '<span class="texto-dim">' + (d.resumen.total ? d.resumen.total + ' marcaje(s) · ' + d.porcentajePresencia + '% presencia' : 'Sin marcajes este año') + '</span></div>' +
+        (d.resumen.total ?
+          '<div class="card-cuerpo">' +
+          '<div class="rejilla-2">' +
+          '<div class="stat-card"><span class="stat-ico ok">' + App.icono('check') + '</span><div><strong>' + d.resumen.presentes + '</strong><span class="stat-titulo">Presentes ' + d.anio + '</span></div></div>' +
+          '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('alerta') + '</span><div><strong>' + d.resumen.ausentes + '</strong><span class="stat-titulo">Ausentes ' + d.anio + '</span></div></div>' +
+          '</div>' +
+          '<div class="alerta alerta-info" role="status" style="margin-top:var(--esp-3)">' + App.icono('alerta') +
+          '<div><strong>Mínimos de referencia (ROF-S Art. 18) — el sistema informa, no sanciona:</strong><br>' +
+          'Voluntarios: ' + d.minimosReferencia.voluntariosRegimen + '% régimen · ' + d.minimosReferencia.voluntariosOperativa + '% operativa — ' +
+          'Disponibles: ' + d.minimosReferencia.disponiblesRegimen + '% régimen · ' + d.minimosReferencia.disponiblesOperativa + '% operativa</div></div>' +
+          '</div>' : '');
+      cont.appendChild(card);
+    }).catch(function () {});
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      App.pedir('listarEstadosAsistenciaV2').then(function (res) { estados = res || []; })
+        .catch(function () { estados = []; })
+        .then(function () { return cargarServicios(); })
+        .then(function () { render(); });
+    }
+  };
+})();
+
+var HistorialModule = (function () {
+  'use strict';
+  var cont = null;
+  var items = [];
+  var filtroTipo = '';
+  var filtroResultado = '';
+  var consulta = '';
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      App.pedir('obtenerHistorial', [200]).then(function (res) {
+        items = res || [];
+        render();
+      }).catch(function (err) {
+        cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el historial.</strong> ' + App.h(err.message || err));
+      });
+    },
+    render: render
+  };
+
+  function render() {
+    cont.innerHTML = '';
+    var tipos = {};
+    items.forEach(function (x) { if (x.tipo) tipos[x.tipo] = true; });
+    var optTipos = Object.keys(tipos).sort().map(function (t) {
+      return '<option value="' + App.h(t) + '">' + App.h(t) + '</option>';
+    }).join('');
+
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Historial</h1>' +
+      '<p class="page-sub">Registro cronológico de las operaciones del sistema (' + items.length + ' eventos)</p></div>';
+    cont.appendChild(cabecera);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cabecera">' +
+      '<div class="buscador" style="flex:1;min-width:180px;max-width:300px">' + App.icono('buscar') +
+      '<input class="input" id="hist-buscar" placeholder="Buscar en el historial…" aria-label="Buscar en historial"></div>' +
+      '<select class="select" id="hist-filtro-tipo" style="width:auto" aria-label="Filtrar por tipo">' +
+      '<option value="">Todos los tipos</option>' + optTipos + '</select>' +
+      '<select class="select" id="hist-filtro-resultado" style="width:auto" aria-label="Filtrar por resultado">' +
+      '<option value="">Todos los resultados</option><option value="ok">Correctos</option><option value="error">Con error</option>' +
+      '</select></div>' +
+      '<div class="card-cuerpo" id="hist-cuerpo"></div>';
+    cont.appendChild(card);
+
+    document.getElementById('hist-buscar').addEventListener('input', App.debounce(function () {
+      consulta = this.value;
+      pintar();
+    }, 250));
+    document.getElementById('hist-filtro-tipo').addEventListener('change', function () {
+      filtroTipo = this.value;
+      pintar();
+    });
+    document.getElementById('hist-filtro-resultado').addEventListener('change', function () {
+      filtroResultado = this.value;
+      pintar();
+    });
+
+    pintar();
+  }
+
+  function pintar() {
+    var cuerpo = document.getElementById('hist-cuerpo');
+    if (!cuerpo) return;
+    var q = consulta.trim().toLowerCase();
+    var filtrados = items.filter(function (x) {
+      if (filtroTipo && x.tipo !== filtroTipo) return false;
+      if (filtroResultado === 'ok' && x.ok === false) return false;
+      if (filtroResultado === 'error' && x.ok !== false) return false;
+      if (!q) return true;
+      return String(x.titulo + ' ' + (x.detalle || '')).toLowerCase().indexOf(q) !== -1;
+    });
+    if (!filtrados.length) {
+      cuerpo.innerHTML = App.empty('historial', 'Sin eventos', 'No hay eventos que coincidan con los filtros aplicados.');
+      return;
+    }
+    var html = '<div class="timeline">';
+    for (var i = 0; i < filtrados.length; i++) {
+      var x = filtrados[i];
+      html += '<div class="tl-item ' + (x.ok === false ? 'error' : 'ok') + '">' +
+        '<div class="tl-fecha">' + App.h(x.fecha) + (x.hora ? ' · ' + App.h(x.hora) : '') + ' · ' + App.h(x.tipo) + '</div>' +
+        '<div class="tl-titulo">' + App.h(x.titulo) + '</div>' +
+        (x.detalle ? '<div class="tl-detalle">' + App.h(x.detalle) + '</div>' : '') +
+        '</div>';
+    }
+    html += '</div>';
+    cuerpo.innerHTML = html;
+  }
+})();
+
+var ConfigModule = (function () {
+  'use strict';
+  var cont = null;
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 6);
+      App.pedir('obtenerConfiguracion').then(function (cfg) {
+        cont.innerHTML =
+          '<div class="page-cabecera"><div><h1 class="page-titulo">Configuración</h1>' +
+          '<p class="page-sub">Parámetros de negocio del sistema (solo lectura desde la Web App)</p></div></div>' +
+          '<div class="card"><div class="card-cabecera">' +
+          App.alerta('info', '<strong>Parámetros del sistema.</strong> Los cambios se realizan por administración técnica en la hoja Config.') +
+          '</div><div class="card-cuerpo sin-pad">' +
+          (cfg && cfg.length ?
+            '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Parámetro</th><th>Valor</th><th>Tipo</th><th>Descripción</th></tr></thead><tbody>' +
+            cfg.map(function (c) {
+              return '<tr><td class="fuerte">' + App.h(c.parametro) + '</td>' +
+                '<td>' + App.h(c.valor) + '</td>' +
+                '<td>' + App.h(c.tipo) + '</td>' +
+                '<td class="aviso-fila">' + App.h(c.ayuda) + '</td></tr>';
+            }).join('') +
+            '</tbody></table></div>'
+            : App.empty('config', 'Sin parámetros', 'La hoja Config aún no tiene parámetros.')) +
+          '</div></div>';
+      }).catch(function (err) {
+        cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar la configuración.</strong> ' + App.h(err.message || err));
+      });
+    }
+  };
+})();
+
+App.registrarPagina('servicios', ServiciosModule);
+App.registrarPagina('asistencia', AsistenciaModule);
+App.registrarPagina('historial', HistorialModule);
+App.registrarPagina('configuracion', ConfigModule);</script>

@@ -1,0 +1,251 @@
+<script>/* ============ PÁGINA INVENTARIO ============
+   Tarjetas visuales por elemento (Disponible/Entregado/Dañado/Extraviado/Baja)
+   con botón "Ver detalle" que despliega el desglose por talla.
+   Operaciones: nueva entrada y ajustes. Backend sin cambios. */
+
+var InventarioModule = (function () {
+  'use strict';
+
+  var cont = null;
+  var lista = [];
+  var consulta = '';
+  var filtroEstado = '';
+  var abiertos = {};
+
+  var ESTADOS = ['Disponible', 'Entregado', 'Dañado', 'Extraviado', 'Baja'];
+  var COLOR = { 'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B' };
+
+  function agrupar() {
+    var q = consulta.trim().toLowerCase();
+    var grupos = {};
+    for (var i = 0; i < lista.length; i++) {
+      var f = lista[i];
+      if (filtroEstado && f.estado !== filtroEstado) continue;
+      if (q && String(f.elemento + ' ' + f.id + ' ' + f.serie).toLowerCase().indexOf(q) === -1) continue;
+      if (!grupos[f.elementoId]) {
+        grupos[f.elementoId] = { elemento: f.elemento, id: f.elementoId, filas: [], total: 0 };
+      }
+      grupos[f.elementoId].filas.push(f);
+      grupos[f.elementoId].total += f.cantidad;
+    }
+    var res = Object.keys(grupos).map(function (k) { return grupos[k]; });
+    res.sort(function (a, b) { return b.total - a.total; });
+    return res;
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Inventario</h1>' +
+      '<p class="page-sub">Existencias físicas por elemento y talla</p></div>' +
+      '<div class="page-acciones"><button class="btn btn-primario" id="inv-entrada">' + App.icono('mas') + 'Nueva entrada</button></div>';
+    cont.appendChild(cabecera);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cabecera">' +
+      '<div class="buscador" style="flex:1;min-width:200px;max-width:340px">' + App.icono('buscar') +
+      '<input class="input" id="inv-buscar" placeholder="Buscar por elemento, ID o serie…" aria-label="Buscar en inventario"></div>' +
+      '<select class="select" id="inv-filtro-estado" style="width:auto" aria-label="Filtrar por estado">' +
+      '<option value="">Todos los estados</option>' +
+      ESTADOS.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('') + '</select>' +
+      '</div>' +
+      '<div class="card-cuerpo" id="inv-cuerpo"></div>';
+    cont.appendChild(card);
+
+    document.getElementById('inv-entrada').addEventListener('click', abrirEntrada);
+    document.getElementById('inv-buscar').addEventListener('input', App.debounce(function () {
+      consulta = this.value;
+      renderLista();
+    }, 250));
+    document.getElementById('inv-filtro-estado').addEventListener('change', function () {
+      filtroEstado = this.value;
+      renderLista();
+    });
+
+    renderLista();
+  }
+
+  function renderLista() {
+    var cuerpo = document.getElementById('inv-cuerpo');
+    if (!cuerpo) return;
+    var grupos = agrupar();
+    if (!grupos.length) {
+      cuerpo.innerHTML = App.empty('inventario', consulta || filtroEstado ? 'Sin resultados' : 'Inventario vacío',
+        consulta || filtroEstado ? 'Prueba con otros filtros.' : 'Registra la primera entrada con el botón "Nueva entrada".');
+      return;
+    }
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--esp-4)">';
+    for (var i = 0; i < grupos.length; i++) {
+      var g = grupos[i];
+      var totales = {};
+      for (var s = 0; s < ESTADOS.length; s++) totales[ESTADOS[s]] = 0;
+      for (var f = 0; f < g.filas.length; f++) {
+        totales[g.filas[f].estado] = (totales[g.filas[f].estado] || 0) + g.filas[f].cantidad;
+      }
+      var chips = ESTADOS.map(function (es) {
+        if (!totales[es]) return '';
+        return '<span class="chip" style="border-color:' + COLOR[es] + '66;background:var(--superficie)"><span style="width:8px;height:8px;border-radius:50%;background:' + COLOR[es] + ';display:inline-block"></span>' +
+          App.h(es) + ' <span class="cant">' + totales[es] + '</span></span>';
+      }).join('') || '<span class="texto-dim">Sin existencias</span>';
+
+      var tallas = {};
+      for (var t = 0; t < g.filas.length; t++) {
+        var talla = g.filas[t].talla || 'Sin talla';
+        if (!tallas[talla]) tallas[talla] = {};
+        tallas[talla][g.filas[t].estado] = (tallas[talla][g.filas[t].estado] || 0) + g.filas[t].cantidad;
+      }
+      var detalle = Object.keys(tallas).map(function (ta) {
+        var celdas = ESTADOS.map(function (es) {
+          return '<td class="num">' + (tallas[ta][es] ? tallas[ta][es] : '—') + '</td>';
+        }).join('');
+        return '<tr><td class="fuerte">' + App.h(ta) + '</td>' + celdas + '</tr>';
+      }).join('');
+
+      html += '<div class="card" style="display:flex;flex-direction:column">' +
+        '<div class="card-cabecera" style="border-bottom:0;padding-bottom:0">' +
+        '<h2 class="card-titulo">' + App.h(g.elemento) + ' <span class="texto-dim">(' + App.h(g.id) + ')</span></h2>' +
+        '<span class="badge badge-neutro">' + g.total + ' u.</span></div>' +
+        '<div class="card-cuerpo" style="padding-top:var(--esp-2)">' +
+        '<div class="fila" style="gap:6px">' + chips + '</div>' +
+        '<div id="detalle-' + App.h(g.id) + '"' + (abiertos[g.id] ? '' : ' hidden') + ' style="margin-top:var(--esp-3)">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Talla</th><th>Disponible</th><th>Entregado</th><th>Dañado</th><th>Extraviado</th><th>Baja</th><th></th></tr></thead>' +
+        '<tbody>' + detalle + '</tbody></table></div></div>' +
+        '<div class="fila" style="margin-top:var(--esp-3)">' +
+        '<button class="btn btn-ghost" data-detalle="' + App.h(g.id) + '" aria-expanded="' + (abiertos[g.id] ? 'true' : 'false') + '">' +
+        (abiertos[g.id] ? App.icono('chevronD') : App.icono('chevronR')) + (abiertos[g.id] ? 'Ocultar detalle' : 'Ver detalle') + '</button>' +
+        '</div></div></div>';
+    }
+    html += '</div>';
+    cuerpo.innerHTML = html;
+
+    cuerpo.querySelectorAll('[data-detalle]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-detalle');
+        abiertos[id] = !abiertos[id];
+        renderLista();
+      });
+    });
+    cuerpo.querySelectorAll('[data-ajustar]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-ajustar');
+        var fila = lista.find(function (x) { return x.id === id; });
+        if (fila) abrirAjuste(fila);
+      });
+    });
+  }
+
+  function abrirEntrada() {
+    App.pedir('buscarElementos').then(function (elementos) {
+      var activos = elementos.filter(function (e) { return e.activo; });
+      var opts = activos.map(function (e) {
+        return '<option value="' + App.h(e.id) + '">' + App.h(e.elemento) + ' (' + App.h(e.id) + ')' + (e.requiereTalla ? '' : ' — sin talla') + '</option>';
+      }).join('');
+      if (!activos.length) {
+        App.toast('No hay elementos activos en el catálogo', 'aviso');
+        return;
+      }
+      var m = App.modal({
+        titulo: 'Nueva entrada de inventario',
+        cuerpo:
+          '<div class="campo"><label for="ei-elemento">Elemento *</label><select class="select" id="ei-elemento">' + opts + '</select></div>' +
+          '<div class="campo-fila">' +
+          '<div class="campo"><label for="ei-talla">Talla</label><input class="input" id="ei-talla" placeholder="Ej.: M (o vacío)"></div>' +
+          '<div class="campo"><label for="ei-cantidad">Cantidad *</label><input class="input" id="ei-cantidad" type="number" min="1" value="1"></div>' +
+          '</div>' +
+          '<div class="campo"><label for="ei-estado">Estado</label><select class="select" id="ei-estado">' +
+          '<option value="Disponible">Disponible</option><option value="Dañado">Dañado</option><option value="Baja">Baja</option>' +
+          '</select></div>' +
+          '<div class="campo"><label for="ei-serie">N° de serie</label><input class="input" id="ei-serie" placeholder="Opcional (solo si es pieza única)"></div>' +
+          '<div class="campo"><label for="ei-obs">Observaciones</label><input class="input" id="ei-obs" placeholder="Opcional"></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-ei="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="ei-guardar">' + App.icono('check') + 'Registrar entrada</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-ei]').addEventListener('click', m.cerrar);
+      document.getElementById('ei-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('ei-guardar');
+        var cantidad = parseInt(document.getElementById('ei-cantidad').value, 10);
+        if (!cantidad || cantidad < 1) { App.toast('Cantidad inválida', 'aviso'); return; }
+        App.botonEstado(btn, 'procesando', 'Registrando…');
+        App.pedir('registrarEntradaInventario', [{
+          elementoId: document.getElementById('ei-elemento').value,
+          talla: document.getElementById('ei-talla').value.trim() || null,
+          cantidad: cantidad,
+          estado: document.getElementById('ei-estado').value,
+          serie: document.getElementById('ei-serie').value.trim() || null,
+          observaciones: document.getElementById('ei-obs').value.trim() || null
+        }]).then(function () {
+          m.cerrar();
+          App.toast('Entrada registrada', 'ok');
+          App.trasCambio();
+          cargar();
+        }).catch(function (err) {
+          App.botonEstado(btn, 'normal');
+          App.toast(err.message || 'No se pudo registrar la entrada', 'error');
+        });
+      });
+    }).catch(function (err) {
+      App.toast(err.message || 'No se pudo cargar el catálogo', 'error');
+    });
+  }
+
+  function abrirAjuste(fila) {
+    var m = App.modal({
+      titulo: 'Ajustar ' + fila.id,
+      cuerpo:
+        '<p style="margin:0 0 12px;font-size:13px">' + App.h(fila.elemento) +
+        (fila.talla && fila.talla !== 'Sin talla' ? ' · Talla ' + App.h(fila.talla) : '') +
+        ' · <strong>' + App.h(fila.estado) + ': ' + fila.cantidad + '</strong></p>' +
+        '<div class="campo"><label for="aj-cantidad">Nueva cantidad</label><input class="input" id="aj-cantidad" type="number" min="0" value="' + fila.cantidad + '"></div>' +
+        '<div class="campo"><label for="aj-estado">Estado</label><select class="select" id="aj-estado">' +
+        ESTADOS.map(function (e) { return '<option value="' + e + '"' + (fila.estado === e ? ' selected' : '') + '>' + e + '</option>'; }).join('') + '</select></div>' +
+        '<div class="campo"><label for="aj-obs">Observaciones</label><input class="input" id="aj-obs" placeholder="Opcional"></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-aj="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="aj-guardar">' + App.icono('check') + 'Guardar ajuste</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-aj]').addEventListener('click', m.cerrar);
+    document.getElementById('aj-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('aj-guardar');
+      var cantidad = parseInt(document.getElementById('aj-cantidad').value, 10);
+      if (isNaN(cantidad) || cantidad < 0) { App.toast('Cantidad inválida', 'aviso'); return; }
+      App.botonEstado(btn, 'procesando', 'Guardando…');
+      App.pedir('ajustarInventario', [fila.id, {
+        cantidad: cantidad,
+        estado: document.getElementById('aj-estado').value,
+        observaciones: document.getElementById('aj-obs').value.trim() || null
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Ajuste guardado', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        App.botonEstado(btn, 'normal');
+        App.toast(err.message || 'No se pudo guardar el ajuste', 'error');
+      });
+    });
+  }
+
+  function cargar() {
+    App.pedir('obtenerInventario').then(function (res) {
+      lista = res || [];
+      renderLista();
+    }).catch(function (err) {
+      var cuerpo = document.getElementById('inv-cuerpo');
+      if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el inventario.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 6);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('inventario', InventarioModule);</script>

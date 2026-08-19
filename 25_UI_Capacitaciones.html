@@ -1,0 +1,262 @@
+<script>/* ============ PÁGINA: CAPACITACIONES (V2) ============
+   Catálogo de capacitaciones + asignación a voluntarios (vencimiento derivado)
+   + vencidas (backend 26_Capacitaciones.js). */
+
+var CapacitacionesModule = (function () {
+  'use strict';
+  var cont = null;
+  var lista = [];
+  var pestaña = 'catalogo';
+
+  function cargar() {
+    App.pedir('listarCapacitacionesV2').then(function (res) {
+      lista = res || [];
+      render();
+    }).catch(function (err) {
+      cont.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las capacitaciones.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Capacitaciones</h1>' +
+      '<p class="page-sub">Catálogo de capacitaciones, asignación a voluntarios y vencidas</p></div>';
+    cont.appendChild(cabecera);
+
+    var tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    tabs.innerHTML =
+      '<button class="tab" data-tab="catalogo">Catálogo (' + lista.length + ')</button>' +
+      '<button class="tab" data-tab="venc">Vencidas</button>' +
+      '<button class="tab" data-tab="asig">Por voluntario</button>';
+    cont.appendChild(tabs);
+    tabs.querySelectorAll('.tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        pestaña = b.getAttribute('data-tab');
+        tabs.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('activa'); });
+        b.classList.add('activa');
+        pintar();
+      });
+    });
+    pintar();
+  }
+
+  function pintar() {
+    var anterior = cont.querySelector('.card');
+    if (anterior) anterior.remove();
+    var card = document.createElement('div');
+    card.className = 'card';
+    cont.appendChild(card);
+
+    if (pestaña === 'catalogo') {
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Catálogo</strong>' +
+        '<button class="btn btn-primario" id="cp-nuevo">' + App.icono('mas') + 'Nueva capacitación</button></div>' +
+        '<div class="card-cuerpo sin-pad">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Capacitación</th><th>Institución</th><th>Tipo</th><th>Horas</th><th>Vigencia</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+        lista.map(function (c) {
+          return '<tr><td class="fuerte">' + App.h(c.nombre) + '</td>' +
+            '<td>' + App.h(c.institucion || '—') + '</td>' +
+            '<td>' + App.h(c.tipo || '—') + '</td>' +
+            '<td class="num">' + App.h(c.horas) + '</td>' +
+            '<td>' + (c.vigenciaMeses ? c.vigenciaMeses + ' meses' : 'Sin vigencia') + '</td>' +
+            '<td>' + App.badge(c.activo ? 'Activo' : 'Inactivo', c.activo ? 'ok' : 'gris') + '</td>' +
+            '<td><div class="acciones">' +
+            '<button class="btn-icono" data-cp-edit="' + App.h(c.id) + '" title="Editar" aria-label="Editar">' + App.icono('editar') + '</button>' +
+            '<button class="btn-icono" data-cp-asig="' + App.h(c.id) + '" title="Asignar a voluntario" aria-label="Asignar">' + App.icono('voluntarios') + '</button>' +
+            '</div></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+      document.getElementById('cp-nuevo').addEventListener('click', formCatalogo(null));
+      card.querySelectorAll('[data-cp-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = lista.find(function (c) { return c.id === this.getAttribute('data-cp-edit'); }, b);
+          if (item) formCatalogo(item)();
+        });
+      });
+      card.querySelectorAll('[data-cp-asig]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = lista.find(function (c) { return c.id === this.getAttribute('data-cp-asig'); }, b);
+          if (item) formAsignar(item);
+        });
+      });
+      return;
+    }
+
+    if (pestaña === 'venc') {
+      card.innerHTML = '<div class="card-cabecera"><strong>Capacitaciones vencidas</strong><span class="texto-dim">Asignaciones cuya fecha de vencimiento ya pasó</span></div>' +
+        '<div class="card-cuerpo" id="cp-venc-cuerpo"></div>';
+      App.pedir('obtenerCapacitacionesVencidasV2').then(function (res) {
+        var items = res || [];
+        var cuerpo = document.getElementById('cp-venc-cuerpo');
+        if (!cuerpo) return;
+        if (!items.length) { cuerpo.innerHTML = App.empty('check', 'Sin vencidas', 'No hay capacitaciones vencidas.'); return; }
+        cuerpo.innerHTML = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Voluntario</th><th>Capacitación</th><th>Fecha</th><th>Vencimiento</th></tr></thead><tbody>' +
+          items.map(function (x) {
+            return '<tr><td class="fuerte">' + App.h(x.voluntario) + '</td>' +
+              '<td>' + App.h(x.capacitacion) + '</td>' +
+              '<td>' + App.h(x.fecha || '—') + '</td>' +
+              '<td>' + App.h(x.fechaVencimiento || '—') + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+      }).catch(function (err) {
+        var cuerpo = document.getElementById('cp-venc-cuerpo');
+        if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las vencidas.</strong> ' + App.h(err.message || err));
+      });
+      return;
+    }
+
+    card.innerHTML =
+      '<div class="card-cabecera"><strong>Capacitaciones por voluntario</strong></div>' +
+      '<div class="card-cuerpo"><div class="campo-fila">' +
+      '<div class="campo"><label for="cp-vol">Voluntario N°</label><input class="input" id="cp-vol" placeholder="Ej.: 3"></div>' +
+      '<button class="btn btn-secundario" id="cp-vol-ver">' + App.icono('documento') + 'Ver capacitaciones</button></div>' +
+      '<div id="cp-vol-resultado" style="margin-top:var(--esp-3)"></div></div>';
+    document.getElementById('cp-vol-ver').addEventListener('click', verPorVoluntario);
+    document.getElementById('cp-vol').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') verPorVoluntario();
+    });
+  }
+
+  function verPorVoluntario() {
+    var vol = document.getElementById('cp-vol').value.trim();
+    var caja = document.getElementById('cp-vol-resultado');
+    if (!vol) { caja.innerHTML = ''; return; }
+    caja.innerHTML = '<div class="skeleton" style="height:56px"></div>';
+    App.pedir('listarCapacitacionesVoluntarioV2', [vol]).then(function (res) {
+      var items = res || [];
+      caja.innerHTML = '<div class="alerta alerta-info" role="status">' + App.icono('alerta') +
+        '<div><strong>Vol. ' + App.h(vol) + '</strong> — ' + items.length + ' capacitación(es)' +
+        '<div style="margin-top:var(--esp-2)"><button class="btn btn-primario" id="cp-asig-nueva">' + App.icono('mas') + 'Asignar capacitación</button></div></div></div>' +
+        (items.length ?
+          '<div class="tabla-wrap" style="margin-top:var(--esp-3)"><table class="tabla"><thead><tr><th>Capacitación</th><th>Institución</th><th>Fecha</th><th>Vencimiento</th><th>Aprobada</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+          items.map(function (x) {
+            return '<tr><td class="fuerte">' + App.h(x.nombre) + '</td>' +
+              '<td>' + App.h(x.institucion || '—') + '</td>' +
+              '<td>' + App.h(x.fecha || '—') + '</td>' +
+              '<td>' + App.h(x.fechaVencimiento || '—') + '</td>' +
+              '<td>' + (x.aprobado ? App.badge('Aprobada', 'ok') : App.badge('No aprobada', 'gris')) + '</td>' +
+              '<td><div class="acciones"><button class="btn-icono btn-icono-rojo" data-cp-del="' + App.h(x.id) + '" title="Cerrar relación" aria-label="Cerrar relación">' + App.icono('x') + '</button></div></td></tr>';
+          }).join('') +
+          '</tbody></table></div>' : '');
+      document.getElementById('cp-asig-nueva').addEventListener('click', function () { formAsignar(null, vol); });
+      caja.querySelectorAll('[data-cp-del]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var id = b.getAttribute('data-cp-del');
+          App.confirmar({ titulo: 'Cerrar relación', mensaje: 'Esta acción no eliminará el registro histórico. La relación quedará cerrada y permanecerá disponible en el historial.', confirmar: 'Cerrar', tipo: 'peligro' }).then(function (si) {
+            if (!si) return;
+            App.pedir('quitarCapacitacionV2', [id]).then(function () {
+              App.toast('Relación cerrada', 'ok');
+              verPorVoluntario();
+            }).catch(function (err) { App.toast(err.message || 'No se pudo cerrar', 'error'); });
+          });
+        });
+      });
+    }).catch(function (err) {
+      caja.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las capacitaciones.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function formCatalogo(item) {
+    return function () {
+      var esNuevo = !item;
+      var m = App.modal({
+        titulo: esNuevo ? 'Nueva capacitación' : 'Editar capacitación: ' + App.h(item.nombre),
+        cuerpo: '<div class="campo"><label for="cp-f-nombre">Nombre *</label><input class="input" id="cp-f-nombre" value="' + App.h(item ? item.nombre : '') + '"></div>' +
+          '<div class="campo-fila">' +
+          '<div class="campo"><label for="cp-f-inst">Institución</label><input class="input" id="cp-f-inst" value="' + App.h(item ? item.institucion : '') + '"></div>' +
+          '<div class="campo"><label for="cp-f-instr">Instructor</label><input class="input" id="cp-f-instr" value="' + App.h(item ? item.instructor : '') + '"></div></div>' +
+          '<div class="campo-fila">' +
+          '<div class="campo"><label for="cp-f-tipo">Tipo</label><select class="select" id="cp-f-tipo">' +
+          ['Interna', 'Externa'].map(function (t) { return '<option' + (item && item.tipo === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>' +
+          '<div class="campo"><label for="cp-f-horas">Horas</label><input class="input" id="cp-f-horas" type="number" min="0" value="' + (item ? item.horas : 0) + '"></div>' +
+          '<div class="campo"><label for="cp-f-vig">Vigencia (meses)</label><input class="input" id="cp-f-vig" type="number" min="0" value="' + (item ? item.vigenciaMeses : 0) + '"></div></div>' +
+          '<div class="campo"><label><input type="checkbox" id="cp-f-activo"' + (item && !item.activo ? '' : ' checked') + '> Activo</label></div>' +
+          '<div class="campo"><label for="cp-f-obs">Observaciones</label><textarea class="textarea" id="cp-f-obs" rows="2">' + App.h(item ? item.observaciones : '') + '</textarea></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="cp-f-guardar">' + App.icono('check') + (esNuevo ? 'Crear' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('cp-f-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('cp-f-guardar');
+        btn.disabled = true;
+        var datos = {
+          nombre: document.getElementById('cp-f-nombre').value,
+          institucion: document.getElementById('cp-f-inst').value,
+          instructor: document.getElementById('cp-f-instr').value,
+          tipo: document.getElementById('cp-f-tipo').value,
+          horas: Number(document.getElementById('cp-f-horas').value || 0),
+          vigenciaMeses: Number(document.getElementById('cp-f-vig').value || 0),
+          activo: document.getElementById('cp-f-activo').checked,
+          observaciones: document.getElementById('cp-f-obs').value
+        };
+        App.pedir(esNuevo ? 'crearCapacitacionV2' : 'actualizarCapacitacionV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Capacitación creada' : 'Capacitación actualizada', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  function formAsignar(item, voluntarioFijo) {
+    var m = App.modal({
+      titulo: 'Asignar capacitación',
+      cuerpo: '<div class="campo"><label for="cp-a-vol">Voluntario N°</label><input class="input" id="cp-a-vol" value="' + App.h(voluntarioFijo || '') + '" placeholder="Ej.: 3"></div>' +
+        (!item ?
+          '<div class="campo"><label for="cp-a-cap">Capacitación</label><select class="select" id="cp-a-cap">' +
+          lista.filter(function (c) { return c.activo; }).map(function (c) {
+            return '<option value="' + App.h(c.id) + '">' + App.h(c.nombre) + '</option>';
+          }).join('') + '</select></div>' : '') +
+        '<div class="campo"><label for="cp-a-fecha">Fecha (dd/mm/aaaa)</label><input class="input" id="cp-a-fecha"></div>' +
+        '<div class="campo"><label><input type="checkbox" id="cp-a-aprobada"> Aprobada</label></div>' +
+        '<div class="campo"><label for="cp-a-calif">Calificación</label><input class="input" id="cp-a-calif"></div>' +
+        '<div class="campo"><label for="cp-a-respaldo">Respaldo</label><input class="input" id="cp-a-respaldo"></div>' +
+        '<div class="campo"><label for="cp-a-obs">Observaciones</label><textarea class="textarea" id="cp-a-obs" rows="2"></textarea></div>' +
+        (!item ? '<div class="alerta alerta-info" role="status" style="margin-top:var(--esp-3)">' + App.icono('alerta') +
+          '<div>La fecha de vencimiento se calcula automáticamente según la vigencia del catálogo.</div></div>' : ''),
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="cp-a-guardar">' + App.icono('check') + 'Asignar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('cp-a-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('cp-a-guardar');
+      var vol = document.getElementById('cp-a-vol').value.trim();
+      var capId = item ? item.id : document.getElementById('cp-a-cap').value;
+      if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
+      if (!capId) { App.toast('Selecciona una capacitación', 'aviso'); return; }
+      btn.disabled = true;
+      App.pedir('asignarCapacitacionV2', [vol, capId, {
+        fecha: document.getElementById('cp-a-fecha').value,
+        aprobado: document.getElementById('cp-a-aprobada').checked,
+        calificacion: document.getElementById('cp-a-calif').value,
+        respaldo: document.getElementById('cp-a-respaldo').value,
+        observaciones: document.getElementById('cp-a-obs').value
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Capacitación asignada', 'ok');
+        App.trasCambio();
+        if (voluntarioFijo) verPorVoluntario();
+        else cargar();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo asignar', 'error');
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('capacitaciones', CapacitacionesModule);</script>

@@ -1,0 +1,306 @@
+<script>/* ============ PÁGINA: ESPECIALIDADES (V2) ============
+   Catálogos de especialidades y subespecialidades + asignación a voluntarios
+   (backend 24_Especialidades.js). */
+
+var EspecialidadesModule = (function () {
+  'use strict';
+  var cont = null;
+  var esp = [];
+  var sub = [];
+  var areas = [];
+  var pestaña = 'esp';
+
+  function cargar() {
+    App.pedir('listarEspecialidadesV2').then(function (res) { esp = res || []; })
+      .catch(function () { esp = []; })
+      .then(function () { return App.pedir('listarSubespecialidadesV2'); })
+      .then(function (res) { sub = res || []; })
+      .catch(function () { sub = []; })
+      .then(function () { return App.pedir('listarAreasV2'); })
+      .then(function (res) { areas = res || []; render(); })
+      .catch(function () { areas = []; render(); });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Especialidades</h1>' +
+      '<p class="page-sub">Especialidades y subespecialidades por área, con asignación a voluntarios</p></div>';
+    cont.appendChild(cabecera);
+
+    var tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    tabs.innerHTML =
+      '<button class="tab" data-tab="esp">Especialidades (' + esp.length + ')</button>' +
+      '<button class="tab" data-tab="sub">Subespecialidades (' + sub.length + ')</button>' +
+      '<button class="tab" data-tab="asig">Asignaciones por voluntario</button>';
+    cont.appendChild(tabs);
+    tabs.querySelectorAll('.tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        pestaña = b.getAttribute('data-tab');
+        tabs.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('activa'); });
+        b.classList.add('activa');
+        pintar();
+      });
+    });
+    pintar();
+  }
+
+  function pintar() {
+    var anterior = cont.querySelector('.card');
+    if (anterior) anterior.remove();
+    var card = document.createElement('div');
+    card.className = 'card';
+    cont.appendChild(card);
+
+    if (pestaña === 'esp') {
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Especialidades</strong>' +
+        '<button class="btn btn-primario" id="es-nuevo">' + App.icono('mas') + 'Nueva especialidad</button></div>' +
+        '<div class="card-cuerpo sin-pad">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Especialidad</th><th>Área</th><th>Descripción</th><th>Niveles</th><th>Origen</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+        esp.map(function (e) {
+          return '<tr><td class="fuerte">' + App.patch(e.nombre, 'Insignia de ' + e.nombre) + App.h(e.nombre) + '</td>' +
+            '<td>' + App.h(e.area || '—') + '</td>' +
+            '<td class="aviso-fila">' + App.h(e.descripcion || '') + '</td>' +
+            '<td>' + App.h(e.niveles || '—') + '</td>' +
+            '<td>' + App.h(e.origen) + '</td>' +
+            '<td>' + App.badge(e.activo ? 'Activo' : 'Inactivo', e.activo ? 'ok' : 'gris') + '</td>' +
+            '<td><div class="acciones"><button class="btn-icono" data-esp-edit="' + App.h(e.id) + '" title="Editar" aria-label="Editar">' + App.icono('editar') + '</button></div></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+      document.getElementById('es-nuevo').addEventListener('click', formEsp(null));
+      card.querySelectorAll('[data-esp-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = esp.find(function (e) { return e.id === this.getAttribute('data-esp-edit'); }, b);
+          if (item) formEsp(item)();
+        });
+      });
+      return;
+    }
+
+    if (pestaña === 'sub') {
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Subespecialidades</strong>' +
+        '<button class="btn btn-primario" id="es-sub-nuevo">' + App.icono('mas') + 'Nueva subespecialidad</button></div>' +
+        '<div class="card-cuerpo sin-pad">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Subespecialidad</th><th>Especialidad</th><th>Descripción</th><th>Niveles</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+        sub.map(function (s) {
+          return '<tr><td class="fuerte">' + App.h(s.nombre) + '</td>' +
+            '<td>' + App.h(s.especialidad || '—') + '</td>' +
+            '<td class="aviso-fila">' + App.h(s.descripcion || '') + '</td>' +
+            '<td>' + App.h(s.niveles || '—') + '</td>' +
+            '<td>' + App.badge(s.activo ? 'Activo' : 'Inactivo', s.activo ? 'ok' : 'gris') + '</td>' +
+            '<td><div class="acciones"><button class="btn-icono" data-sub-edit="' + App.h(s.id) + '" title="Editar" aria-label="Editar">' + App.icono('editar') + '</button></div></td></tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+      document.getElementById('es-sub-nuevo').addEventListener('click', formSub(null));
+      card.querySelectorAll('[data-sub-edit]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var item = sub.find(function (s) { return s.id === this.getAttribute('data-sub-edit'); }, b);
+          if (item) formSub(item)();
+        });
+      });
+      return;
+    }
+
+    card.innerHTML =
+      '<div class="card-cabecera"><strong>Asignaciones por voluntario</strong>' +
+      '<span class="texto-dim">Lista las especialidades de un voluntario</span></div>' +
+      '<div class="card-cuerpo"><div class="campo-fila">' +
+      '<div class="campo"><label for="es-vol">Voluntario N°</label><input class="input" id="es-vol" placeholder="Ej.: 3"></div>' +
+      '<button class="btn btn-secundario" id="es-vol-ver">' + App.icono('documento') + 'Ver asignaciones</button></div>' +
+      '<div id="es-vol-resultado" style="margin-top:var(--esp-3)"></div></div>';
+    document.getElementById('es-vol-ver').addEventListener('click', verAsignaciones);
+    document.getElementById('es-vol').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') verAsignaciones();
+    });
+  }
+
+  function verAsignaciones() {
+    var vol = document.getElementById('es-vol').value.trim();
+    var caja = document.getElementById('es-vol-resultado');
+    if (!vol) { caja.innerHTML = ''; return; }
+    caja.innerHTML = '<div class="skeleton" style="height:56px"></div>';
+    App.pedir('listarEspecialidadesVoluntarioV2', [vol]).then(function (res) {
+      var items = res || [];
+      caja.innerHTML = '<div class="alerta alerta-info" role="status">' + App.icono('alerta') +
+        '<div><strong>Vol. ' + App.h(vol) + '</strong> — ' + items.length + ' asignación(es)' +
+        '<div style="margin-top:var(--esp-2)"><button class="btn btn-primario" id="es-asig-nueva">' + App.icono('mas') + 'Asignar especialidad</button></div></div></div>' +
+        (items.length ?
+          '<div class="tabla-wrap" style="margin-top:var(--esp-3)"><table class="tabla"><thead><tr><th>Especialidad</th><th>Nivel</th><th>Fecha</th><th>Credencial</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
+          items.map(function (x) {
+            return '<tr><td class="fuerte">' + App.h(x.nombre) + '</td>' +
+              '<td>' + App.h(x.nivel || '—') + '</td>' +
+              '<td>' + App.h(x.fechaAsignacion || '—') + '</td>' +
+              '<td>' + App.h(x.credencial || '—') + '</td>' +
+              '<td><div class="acciones"><button class="btn-icono btn-icono-rojo" data-asig-del="' + App.h(x.id) + '" title="Cerrar relación" aria-label="Cerrar relación">' + App.icono('x') + '</button></div></td></tr>';
+          }).join('') +
+          '</tbody></table></div>' : '');
+      document.getElementById('es-asig-nueva').addEventListener('click', function () { formAsignacion(vol); });
+      caja.querySelectorAll('[data-asig-del]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var id = b.getAttribute('data-asig-del');
+          App.confirmar({ titulo: 'Cerrar relación', mensaje: 'Esta acción no eliminará el registro histórico. La relación quedará cerrada y permanecerá disponible en el historial.', confirmar: 'Cerrar', tipo: 'peligro' }).then(function (si) {
+            if (!si) return;
+            App.pedir('quitarEspecialidadV2', [id]).then(function () {
+              App.toast('Relación cerrada', 'ok');
+              verAsignaciones();
+            }).catch(function (err) { App.toast(err.message || 'No se pudo cerrar', 'error'); });
+          });
+        });
+      });
+    }).catch(function (err) {
+      caja.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las asignaciones.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function optEspecialidades() {
+    return '<option value="">— Sin especialidad —</option>' +
+      esp.filter(function (e) { return e.activo; }).map(function (e) {
+        return '<option value="' + App.h(e.id) + '">' + App.h(e.nombre) + '</option>';
+      }).join('');
+  }
+
+  function formEsp(item) {
+    return function () {
+      var esNuevo = !item;
+      var optAreas = '<option value="">— Sin área —</option>' +
+        areas.filter(function (a) { return a.activo; }).map(function (a) {
+          return '<option value="' + App.h(a.id) + '"' + (item && item.areaId === a.id ? ' selected' : '') + '>' + App.h(a.nombre) + '</option>';
+        }).join('');
+      var m = App.modal({
+        titulo: esNuevo ? 'Nueva especialidad' : 'Editar especialidad: ' + App.h(item.nombre),
+        cuerpo: '<div class="campo"><label for="es-f-nombre">Nombre *</label><input class="input" id="es-f-nombre" value="' + App.h(item ? item.nombre : '') + '"></div>' +
+          '<div class="campo"><label for="es-f-area">Área</label><select class="select" id="es-f-area">' + optAreas + '</select></div>' +
+          '<div class="campo"><label for="es-f-desc">Descripción</label><textarea class="textarea" id="es-f-desc" rows="2">' + App.h(item ? item.descripcion : '') + '</textarea></div>' +
+          '<div class="campo"><label for="es-f-niveles">Niveles (separados por ; — opcional)</label><input class="input" id="es-f-niveles" value="' + App.h(item ? item.niveles || '' : '') + '" placeholder="Ej.: Básico; Intermedio; Avanzado"></div>' +
+          '<div class="campo"><label><input type="checkbox" id="es-f-activo"' + (item && !item.activo ? '' : ' checked') + '> Activo</label></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="es-f-guardar">' + App.icono('check') + (esNuevo ? 'Crear' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('es-f-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('es-f-guardar');
+        btn.disabled = true;
+        var datos = {
+          nombre: document.getElementById('es-f-nombre').value,
+          areaId: document.getElementById('es-f-area').value,
+          descripcion: document.getElementById('es-f-desc').value,
+          niveles: document.getElementById('es-f-niveles').value,
+          activo: document.getElementById('es-f-activo').checked
+        };
+        App.pedir(esNuevo ? 'crearEspecialidadV2' : 'actualizarEspecialidadV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Especialidad creada' : 'Especialidad actualizada', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  function formSub(item) {
+    return function () {
+      var esNuevo = !item;
+      var optEsp = esp.filter(function (e) { return e.activo; }).map(function (e) {
+        return '<option value="' + App.h(e.id) + '"' + (item && item.especialidadId === e.id ? ' selected' : '') + '>' + App.h(e.nombre) + '</option>';
+      }).join('');
+      var m = App.modal({
+        titulo: esNuevo ? 'Nueva subespecialidad' : 'Editar subespecialidad: ' + App.h(item.nombre),
+        cuerpo: '<div class="campo"><label for="es-s-esp">Especialidad *</label><select class="select" id="es-s-esp">' + optEsp + '</select></div>' +
+          '<div class="campo"><label for="es-s-nombre">Nombre *</label><input class="input" id="es-s-nombre" value="' + App.h(item ? item.nombre : '') + '"></div>' +
+          '<div class="campo"><label for="es-s-desc">Descripción</label><textarea class="textarea" id="es-s-desc" rows="2">' + App.h(item ? item.descripcion : '') + '</textarea></div>' +
+          '<div class="campo"><label for="es-s-niveles">Niveles (separados por ; — opcional)</label><input class="input" id="es-s-niveles" value="' + App.h(item ? item.niveles || '' : '') + '" placeholder="Ej.: Básico; Intermedio; Avanzado"></div>' +
+          '<div class="campo"><label><input type="checkbox" id="es-s-activo"' + (item && !item.activo ? '' : ' checked') + '> Activo</label></div>',
+        acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+          '<button class="btn btn-primario" id="es-s-guardar">' + App.icono('check') + (esNuevo ? 'Crear' : 'Guardar') + '</button>'
+      });
+      m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+      document.getElementById('es-s-guardar').addEventListener('click', function () {
+        var btn = document.getElementById('es-s-guardar');
+        btn.disabled = true;
+        var datos = {
+          especialidadId: document.getElementById('es-s-esp').value,
+          nombre: document.getElementById('es-s-nombre').value,
+          descripcion: document.getElementById('es-s-desc').value,
+          niveles: document.getElementById('es-s-niveles').value,
+          activo: document.getElementById('es-s-activo').checked
+        };
+        App.pedir(esNuevo ? 'crearSubespecialidadV2' : 'actualizarSubespecialidadV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
+          m.cerrar();
+          App.toast(esNuevo ? 'Subespecialidad creada' : 'Subespecialidad actualizada', 'ok');
+          cargar();
+        }).catch(function (err) {
+          btn.disabled = false;
+          App.toast(err.message || 'No se pudo guardar', 'error');
+        });
+      });
+    };
+  }
+
+  function formAsignacion(voluntarioId) {
+    var m = App.modal({
+      titulo: 'Asignar especialidad a Vol. ' + voluntarioId,
+      cuerpo:         '<div class="campo"><label for="es-a-esp">Especialidad</label><select class="select" id="es-a-esp">' + optEspecialidades() + '</select></div>' +
+        '<div class="campo"><label for="es-a-sub">Subespecialidad (opcional)</label><select class="select" id="es-a-sub"><option value="">— Sin subespecialidad —</option></select></div>' +
+        '<div class="campo"><label for="es-a-nivel">Nivel</label><select class="select" id="es-a-nivel"><option value="">— Sin nivel —</option></select></div>' +
+        '<div class="campo"><label for="es-a-fecha">Fecha de asignación (dd/mm/aaaa)</label><input class="input" id="es-a-fecha"></div>' +
+        '<div class="campo"><label for="es-a-obs">Observaciones</label><textarea class="textarea" id="es-a-obs" rows="2"></textarea></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="es-a-guardar">' + App.icono('check') + 'Asignar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    var selEsp = document.getElementById('es-a-esp');
+    var selSub = document.getElementById('es-a-sub');
+    var selNivel = document.getElementById('es-a-nivel');
+    function poblarNiveles() {
+      var id = selEsp.value;
+      var e = esp.find(function (x) { return String(x.id) === String(id); });
+      var niveles = e && e.niveles ? String(e.niveles).split(';').map(function (t) { return t.trim(); }).filter(Boolean) : [];
+      selNivel.innerHTML = '<option value="">— Sin nivel —</option>' +
+        niveles.map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('');
+    }
+    selEsp.addEventListener('change', function () {
+      var id = this.value;
+      var subs = id ? sub.filter(function (s) { return String(s.especialidadId) === String(id) && s.activo; }) : [];
+      selSub.innerHTML = '<option value="">— Sin subespecialidad —</option>' +
+        subs.map(function (s) { return '<option value="' + App.h(s.id) + '">' + App.h(s.nombre) + '</option>'; }).join('');
+      poblarNiveles();
+    });
+    poblarNiveles();
+    document.getElementById('es-a-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('es-a-guardar');
+      btn.disabled = true;
+      App.pedir('asignarEspecialidadV2', [voluntarioId, {
+        especialidadId: selEsp.value,
+        subespecialidadId: selSub.value,
+        nivel: document.getElementById('es-a-nivel').value,
+        fechaAsignacion: document.getElementById('es-a-fecha').value,
+        observaciones: document.getElementById('es-a-obs').value
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Especialidad asignada', 'ok');
+        App.trasCambio();
+        verAsignaciones();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo asignar', 'error');
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargar();
+    }
+  };
+})();
+
+App.registrarPagina('especialidades', EspecialidadesModule);</script>

@@ -1,0 +1,371 @@
+<script>/* ============ PÁGINA VOLUNTARIOS (V2 — FASE V3.4B) ============
+   Fuente de datos: listarPersonasV2 (entidad Voluntarios V2, filtro
+   voluntarioId != null). Alta: crearPersonaV2(voluntario:true).
+   Acciones: darDeBajaVoluntarioV2 / reactivarVoluntarioV2 (cierre lógico).
+   Filtros estado/categoría desde Config (fallback = defaults del sistema). */
+
+var VoluntariosModule = (function () {
+  'use strict';
+
+  var cont = null;
+  var lista = [];
+  var estados = ['Activo', 'Inactivo', 'Suspendido', 'Egresado'];
+  var categorias = ['Aspirante', 'Disponible', 'Voluntario', 'Reserva'];
+  var consulta = '';
+  var filtroEstado = '';
+  var filtroCategoria = '';
+  var filtroEspecialidad = '';
+  var filtroSubespecialidad = '';
+  var filtroUnidad = '';
+  var orden = { col: 'voluntarioId', dir: 1 };
+  var pagina = 1;
+  var POR_PAGINA = 15;
+
+  function kpi(iconoNombre, clase, numero, label) {
+    return '<div class="stat-card">' +
+      '<div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
+      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
+      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
+  }
+
+  function cargarListas() {
+    return App.memo('config', 60000, function () { return App.pedir('obtenerConfiguracion'); })
+      .then(function (cfg) {
+        for (var i = 0; i < cfg.length; i++) {
+          if (cfg[i].parametro === 'ESTADOS') {
+            var es = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+            if (es.length) estados = es;
+          } else if (cfg[i].parametro === 'CATEGORIAS') {
+            var ca = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+            if (ca.length) categorias = ca;
+          }
+        }
+      })
+      .catch(function () {});
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Voluntarios</h1>' +
+      '<p class="page-sub">Registro maestro V2 de la sede</p></div>' +
+      '<div class="page-acciones"><button class="btn btn-primario" id="vol-nuevo">' + App.icono('mas') + 'Nuevo voluntario</button></div>';
+    cont.appendChild(cabecera);
+
+    var total = lista.length;
+    var activos = 0, egresados = 0, otros = 0;
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].estado === 'Activo') activos++;
+      else if (lista[i].estado === 'Egresado') egresados++;
+      else otros++;
+    }
+    var kpiVol = document.createElement('div');
+    kpiVol.className = 'rejilla-kpi';
+    kpiVol.innerHTML =
+      kpi('voluntarios', 'verde', activos, 'Activos') +
+      kpi('voluntarios', 'gris', egresados, 'Egresados') +
+      kpi('voluntarios', 'celeste', otros, 'Inactivos / suspendidos') +
+      kpi('voluntarios', 'azul', total, 'Total registrados');
+    cont.appendChild(kpiVol);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cabecera">' +
+      '<div class="buscador" style="flex:1;min-width:200px;max-width:340px">' + App.icono('buscar') +
+      '<input class="input" id="vol-buscar" placeholder="Buscar por nombre, RUN o N°…" aria-label="Buscar voluntario"></div>' +
+      '<select class="select" id="vol-filtro-estado" style="width:auto" aria-label="Filtrar por estado">' +
+      '<option value="">Todos los estados</option>' +
+      estados.map(function (e) { return '<option value="' + App.h(e) + '">' + App.h(e) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" id="vol-filtro-categoria" style="width:auto" aria-label="Filtrar por categoría">' +
+      '<option value="">Todas las categorías</option>' +
+      categorias.map(function (c) { return '<option value="' + App.h(c) + '">' + App.h(c) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" id="vol-filtro-especialidad" style="width:auto" aria-label="Filtrar por especialidad">' +
+      '<option value="">Todas las especialidades</option>' +
+      opcionesEsp().map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" id="vol-filtro-subesp" style="width:auto" aria-label="Filtrar por subespecialidad">' +
+      '<option value="">Todas las subespecialidades</option>' +
+      opcionesSub().map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" id="vol-filtro-unidad" style="width:auto" aria-label="Filtrar por unidad">' +
+      '<option value="">Todas las unidades</option>' +
+      opcionesUnidad().map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('') + '</select>' +
+      '</div>' +
+      '<div class="card-cuerpo sin-pad" id="vol-cuerpo"></div>' +
+      '<div class="paginacion" id="vol-paginacion"></div>';
+    cont.appendChild(card);
+
+    document.getElementById('vol-nuevo').addEventListener('click', abrirNuevo);
+    document.getElementById('vol-buscar').addEventListener('input', App.debounce(function () {
+      consulta = this.value;
+      pagina = 1;
+      renderLista();
+    }, 250));
+    document.getElementById('vol-filtro-estado').addEventListener('change', function () {
+      filtroEstado = this.value;
+      pagina = 1;
+      renderLista();
+    });
+    document.getElementById('vol-filtro-categoria').addEventListener('change', function () {
+      filtroCategoria = this.value;
+      pagina = 1;
+      renderLista();
+    });
+    document.getElementById('vol-filtro-especialidad').addEventListener('change', function () {
+      filtroEspecialidad = this.value;
+      pagina = 1;
+      renderLista();
+    });
+    document.getElementById('vol-filtro-subesp').addEventListener('change', function () {
+      filtroSubespecialidad = this.value;
+      pagina = 1;
+      renderLista();
+    });
+    document.getElementById('vol-filtro-unidad').addEventListener('change', function () {
+      filtroUnidad = this.value;
+      pagina = 1;
+      renderLista();
+    });
+
+    renderLista();
+  }
+
+  function aplicarFiltros() {
+    var q = consulta.trim().toLowerCase();
+    return lista.filter(function (v) {
+      if (filtroEstado && v.estado !== filtroEstado) return false;
+      if (filtroCategoria && v.categoria !== filtroCategoria) return false;
+      if (filtroEspecialidad) {
+        var enEsp = (v.especialidades || []).some(function (e) { return e.especialidad === filtroEspecialidad; });
+        if (!enEsp) return false;
+      }
+      if (filtroSubespecialidad) {
+        var enSub = (v.especialidades || []).some(function (e) { return e.subespecialidad === filtroSubespecialidad; });
+        if (!enSub) return false;
+      }
+      if (filtroUnidad) {
+        var enUnid = (v.unidades || []).some(function (u) { return u.unidad === filtroUnidad; });
+        if (!enUnid) return false;
+      }
+      if (!q) return true;
+      // V3.4D: la búsqueda global también matchea especialidad, subespecialidad,
+      // nivel y unidad (además de nombre/RUN/ID).
+      var enCapacidades = (v.especialidades || []).some(function (e) {
+        return String(e.especialidad).toLowerCase().indexOf(q) !== -1 ||
+               String(e.subespecialidad).toLowerCase().indexOf(q) !== -1 ||
+               String(e.nivel).toLowerCase().indexOf(q) !== -1;
+      });
+      var enUnidades = (v.unidades || []).some(function (u) {
+        return String(u.unidad).toLowerCase().indexOf(q) !== -1 || String(u.rol).toLowerCase().indexOf(q) !== -1;
+      });
+      return String(v.nombreCompleto).toLowerCase().indexOf(q) !== -1 ||
+             String(v.run).toLowerCase().indexOf(q) !== -1 ||
+             String(v.voluntarioId).indexOf(q) !== -1 ||
+             String(v.grado).toLowerCase().indexOf(q) !== -1 ||
+             String(v.cargo).toLowerCase().indexOf(q) !== -1 ||
+             enCapacidades || enUnidades;
+    }).sort(function (a, b) {
+      var av = a[orden.col] === undefined || a[orden.col] === null ? '' : a[orden.col];
+      var bv = b[orden.col] === undefined || b[orden.col] === null ? '' : b[orden.col];
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * orden.dir;
+      return String(av).localeCompare(String(bv), 'es', { sensitivity: 'base' }) * orden.dir;
+    });
+  }
+
+  function opcionesEsp() {
+    var set = {};
+    lista.forEach(function (v) {
+      (v.especialidades || []).forEach(function (e) { if (e.especialidad) set[e.especialidad] = true; });
+    });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'es', { sensitivity: 'base' }); });
+  }
+
+  function opcionesSub() {
+    var set = {};
+    lista.forEach(function (v) {
+      (v.especialidades || []).forEach(function (e) { if (e.subespecialidad) set[e.subespecialidad] = true; });
+    });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'es', { sensitivity: 'base' }); });
+  }
+
+  function opcionesUnidad() {
+    var set = {};
+    lista.forEach(function (v) {
+      (v.unidades || []).forEach(function (u) { if (u.unidad) set[u.unidad] = true; });
+    });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'es', { sensitivity: 'base' }); });
+  }
+
+  function renderLista() {
+    var cuerpo = document.getElementById('vol-cuerpo');
+    if (!cuerpo) return;
+    var filtrados = aplicarFiltros();
+    var totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+    if (pagina > totalPaginas) pagina = totalPaginas;
+    var desde = (pagina - 1) * POR_PAGINA;
+    var visibles = filtrados.slice(desde, desde + POR_PAGINA);
+
+    var pag = document.getElementById('vol-paginacion');
+    if (pag) {
+      pag.innerHTML = '<span class="info">' + filtrados.length + ' voluntario(s) · página ' + pagina + ' de ' + totalPaginas + '</span>' +
+        '<div class="paginas">' +
+        '<button class="pag-btn" data-pag="prev"' + (pagina <= 1 ? ' disabled' : '') + '>‹</button>' +
+        '<button class="pag-btn" data-pag="next"' + (pagina >= totalPaginas ? ' disabled' : '') + '>›</button>' +
+        '</div>';
+      pag.querySelectorAll('[data-pag]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          pagina += b.getAttribute('data-pag') === 'prev' ? -1 : 1;
+          renderLista();
+        });
+      });
+    }
+
+    if (!filtrados.length) {
+      var hayFiltro = consulta || filtroEstado || filtroCategoria || filtroEspecialidad || filtroSubespecialidad || filtroUnidad;
+      cuerpo.innerHTML = App.empty('voluntarios', hayFiltro ? 'Sin resultados' : 'Aún no hay voluntarios',
+        hayFiltro ? 'Prueba con otros filtros o busca de nuevo.' : 'Registra el primer voluntario con el botón "Nuevo voluntario".');
+      return;
+    }
+
+    var th = function (col, label) {
+      var flecha = orden.col === col ? (orden.dir === 1 ? ' ↑' : ' ↓') : '';
+      return '<th class="ordenable" data-orden="' + col + '">' + label + flecha + '</th>';
+    };
+    var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      th('voluntarioId', 'N°') + th('nombreCompleto', 'Voluntario') + th('run', 'RUN') + th('grado', 'Grado') +
+      th('cargo', 'Cargo') + th('categoria', 'Categoría') + th('estado', 'Estado') + '<th style="text-align:right">Acciones</th></tr></thead><tbody>';
+
+    for (var i = 0; i < visibles.length; i++) {
+      var v = visibles[i];
+      html += '<tr>' +
+        '<td class="fuerte num">' + v.voluntarioId + '</td>' +
+        '<td class="fuerte">' + App.h(v.nombreCompleto) + '</td>' +
+        '<td class="num">' + App.h(v.run) + '</td>' +
+        '<td>' + App.h(v.grado || '—') + '</td>' +
+        '<td>' + App.h(v.cargo || '—') + '</td>' +
+        '<td>' + App.h(v.categoria || '—') + '</td>' +
+        '<td>' + App.estadoVoluntario(v.estado) + '</td>' +
+        '<td><div class="acciones">' +
+        '<button class="btn-icono" data-ficha="' + v.voluntarioId + '" title="Ver ficha" aria-label="Ver ficha de ' + App.h(v.nombreCompleto) + '">' + App.icono('usuario') + '</button>' +
+        (v.estado !== 'Egresado' ?
+          '<button class="btn-icono rojo" data-baja="' + v.voluntarioId + '" title="Dar de baja" aria-label="Dar de baja a ' + App.h(v.nombreCompleto) + '">' + App.icono('x') + '</button>' :
+          '<button class="btn-icono" data-reactivar="' + v.voluntarioId + '" title="Reactivar" aria-label="Reactivar a ' + App.h(v.nombreCompleto) + '">' + App.icono('check') + '</button>') +
+        '</div></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    cuerpo.innerHTML = html;
+
+    cuerpo.querySelectorAll('th[data-orden]').forEach(function (thEl) {
+      thEl.addEventListener('click', function () {
+        var col = thEl.getAttribute('data-orden');
+        if (orden.col === col) orden.dir *= -1;
+        else orden = { col: col, dir: 1 };
+        renderLista();
+      });
+    });
+    cuerpo.querySelectorAll('[data-ficha]').forEach(function (b) {
+      b.addEventListener('click', function () { App.navegar('ficha', { id: parseInt(b.getAttribute('data-ficha'), 10) }); });
+    });
+    cuerpo.querySelectorAll('[data-baja]').forEach(function (b) {
+      b.addEventListener('click', function () { darDeBaja(parseInt(b.getAttribute('data-baja'), 10)); });
+    });
+    cuerpo.querySelectorAll('[data-reactivar]').forEach(function (b) {
+      b.addEventListener('click', function () { reactivar(parseInt(b.getAttribute('data-reactivar'), 10)); });
+    });
+  }
+
+  function abrirNuevo() {
+    var m = App.modal({
+      titulo: 'Nuevo voluntario',
+      cuerpo:
+        '<div class="campo"><label for="nv-run">RUN *</label><input class="input" id="nv-run" placeholder="Ej.: 12.345.678-5"></div>' +
+        '<div class="campo"><label for="nv-nombres">Nombres *</label><input class="input" id="nv-nombres" placeholder="Ej.: Juan Pablo"></div>' +
+        '<div class="campo"><label for="nv-paterno">Apellido paterno *</label><input class="input" id="nv-paterno" placeholder="Ej.: Pérez"></div>' +
+        '<div class="campo"><label for="nv-materno">Apellido materno</label><input class="input" id="nv-materno" placeholder="Opcional"></div>' +
+        '<div class="campo"><label for="nv-categoria">Categoría</label><select class="select" id="nv-categoria">' +
+        categorias.map(function (c) { return '<option value="' + App.h(c) + '">' + App.h(c) + '</option>'; }).join('') + '</select></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-nv="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="nv-guardar">' + App.icono('check') + 'Registrar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-nv]').addEventListener('click', m.cerrar);
+    document.getElementById('nv-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('nv-guardar');
+      App.botonEstado(btn, 'procesando', 'Registrando…');
+      App.pedir('crearPersonaV2', [{
+        run: document.getElementById('nv-run').value.trim(),
+        nombres: document.getElementById('nv-nombres').value.trim(),
+        apPaterno: document.getElementById('nv-paterno').value.trim(),
+        apMaterno: document.getElementById('nv-materno').value.trim(),
+        categoria: document.getElementById('nv-categoria').value,
+        voluntario: true
+      }]).then(function (r) {
+        m.cerrar();
+        App.toast('Voluntario registrado (N° ' + r.voluntarioId + ')', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        App.botonEstado(btn, 'normal');
+        App.toast(err.message || 'No se pudo registrar', 'error');
+      });
+    });
+  }
+
+  function darDeBaja(id) {
+    var v = lista.find(function (x) { return x.voluntarioId === id; });
+    App.confirmar({
+      titulo: 'Dar de baja',
+      mensaje: '¿Dar de baja a "' + (v ? v.nombreCompleto : id) + '"? El registro se conserva en el historial (cierre lógico).',
+      confirmar: 'Dar de baja',
+      tipo: 'peligro'
+    }).then(function (si) {
+      if (!si) return;
+      App.pedir('darDeBajaVoluntarioV2', [id, {}]).then(function () {
+        App.toast('Voluntario dado de baja', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        App.toast(err.message || 'No se pudo dar de baja', 'error');
+      });
+    });
+  }
+
+  function reactivar(id) {
+    var v = lista.find(function (x) { return x.voluntarioId === id; });
+    App.confirmar({
+      titulo: 'Reactivar voluntario',
+      mensaje: '¿Reactivar a "' + (v ? v.nombreCompleto : id) + '"? Volverá a estado Activo.',
+      confirmar: 'Reactivar'
+    }).then(function (si) {
+      if (!si) return;
+      App.pedir('reactivarVoluntarioV2', [id, {}]).then(function () {
+        App.toast('Voluntario reactivado', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        App.toast(err.message || 'No se pudo reactivar', 'error');
+      });
+    });
+  }
+
+  function cargar() {
+    return App.pedir('listarPersonasV2').then(function (res) {
+      var personas = res || [];
+      lista = personas.filter(function (p) { return p.voluntarioId !== null && p.voluntarioId !== undefined; });
+      render();
+    }).catch(function (err) {
+      var cuerpo = document.getElementById('vol-cuerpo');
+      if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar los voluntarios.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 6);
+      cargarListas().then(function () { return cargar(); });
+    }
+  };
+})();
+
+App.registrarPagina('voluntarios', VoluntariosModule);</script>

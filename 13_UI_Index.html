@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Defensa Civil de Chile — Sede La Serena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ===== CSS CRÍTICO: garantiza una sola vista activa y layout base
+       aunque el sistema de diseño completo fallara. No duplicar aquí
+       reglas que viven en 13_UI_Styles. ===== */
+    .page { display: none !important; }
+    .page.activa { display: block !important; }
+    body { margin: 0; font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif; }
+  </style>
+  <?!= include('13_UI_Styles'); ?>
+</head>
+<body>
+  <div id="splash" role="status" aria-label="Cargando sistema">
+    <div class="splash-inner">
+      <img class="logo-institucional splash-logo" alt="Logo Defensa Civil de Chile">
+      <div class="splash-titulo">DEFENSA CIVIL DE CHILE</div>
+      <div class="splash-sub">Sede La Serena · Al servicio de la ciudadanía</div>
+      <div class="splash-carga"><span class="spinner" aria-hidden="true"></span><span>Cargando sistema…</span></div>
+    </div>
+  </div>
+
+  <div class="banner-error" id="banner-error" role="alert">
+    <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+    <span id="banner-error-texto">Ocurrió un error inesperado. Recarga la página.</span>
+  </div>
+
+  <header class="app-header">
+    <div class="header-izq">
+      <button class="btn-menu" id="btn-menu" aria-label="Abrir menú" aria-expanded="false">☰</button>
+      <div class="logo">
+        <img class="logo-institucional logo-header" alt="Logo Defensa Civil de Chile">
+        <div class="logo-texto">
+          <div class="logo-titulo">DEFENSA CIVIL DE CHILE</div>
+          <div class="logo-sub">Sede La Serena · Al servicio de la ciudadanía</div>
+        </div>
+      </div>
+    </div>
+    <div class="header-der">
+      <span class="seccion-actual" id="seccion-actual">Panel de control</span>
+      <span class="estado-sistema">
+        <span class="dot dot-ok" id="usuario-dot" title="Sesión de Google"></span>
+        Sistema operativo
+      </span>
+      <button class="bell" id="btn-alertas" title="Ver alertas del panel" aria-label="Alertas del sistema">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="nav-badge gris oculta" id="bell-alertas">0</span>
+      </button>
+      <div class="usuario" id="usuario-boton" role="button" tabindex="0" aria-label="Menú de usuario">
+        <div class="avatar" id="usuario-avatar">?</div>
+        <div class="usuario-info">
+          <div class="usuario-nombre" id="usuario-nombre">Conectando…</div>
+          <div class="usuario-rol">Administración</div>
+        </div>
+        <span class="usuario-chevron" aria-hidden="true">▼</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+      <div class="sidebar-logo">
+        <img class="logo-institucional logo-sidebar" id="logo-sidebar" alt="Logo Defensa Civil de Chile">
+        <div class="sidebar-logo-texto">
+          <strong>DEFENSA CIVIL<br>DE CHILE</strong>
+          <span>Sede La Serena</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <div class="nav-grupo">Inicio</div>
+        <a class="nav-item" href="#/dashboard" data-ruta="dashboard">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span>Panel de control</span>
+          <span class="nav-badge oculta" id="nav-alertas">0</span>
+        </a>
+
+        <div class="nav-grupo">Gestión</div>
+        <a class="nav-item" href="#/voluntarios" data-ruta="voluntarios">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3.5 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.8"/><path d="M15.5 14.2c2.4.2 4.3 1.7 5 4.8"/></svg>
+          <span>Voluntarios</span>
+        </a>
+        <a class="nav-item" href="#/servicios" data-ruta="servicios">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+          <span>Servicios</span>
+        </a>
+        <a class="nav-item" href="#/asistencia" data-ruta="asistencia">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 15l3 3 5-5"/></svg>
+          <span>Asistencia</span>
+        </a>
+
+        <div class="nav-grupo">Equipamiento</div>
+        <div class="nav-grupo-exp" id="grupo-equipamiento">
+          <button class="nav-item" id="btn-grupo-equipamiento" aria-expanded="false" aria-controls="sub-equipamiento">
+            <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 3l8 4v10l-8 4-8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>
+            <span>Equipamiento</span>
+            <span class="nav-flecha" aria-hidden="true">▶</span>
+          </button>
+          <div class="nav-sub" id="sub-equipamiento">
+            <a class="nav-item" href="#/inventario" data-ruta="inventario">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M16.5 9.4 7.5 4.2"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+              <span>Inventario</span>
+            </a>
+            <a class="nav-item" href="#/entregas" data-ruta="entregas">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M9 3h6v4H9z"/><path d="M5 5h4M15 5h4"/><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M3 13h18"/></svg>
+              <span>Entregas</span>
+            </a>
+            <a class="nav-item" href="#/catalogo" data-ruta="catalogo">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 5c-2-1.4-4.6-1.6-7-1v15c2.4-.6 5-.4 7 1 2-1.4 4.6-1.6 7-1V4c-2.4.6-5 .4-7 1z"/><path d="M12 5v15"/></svg>
+              <span>Catálogo</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="nav-grupo">Institucional</div>
+        <a class="nav-item" href="#/grados" data-ruta="grados">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12.5 12 17l9-4.5M3 16.5 12 21l9-4.5"/></svg>
+          <span>Grados y Cargos</span>
+        </a>
+        <a class="nav-item" href="#/especialidades" data-ruta="especialidades">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M8.2 12.2 7 21l5-2.5L17 21l-1.2-8.8"/></svg>
+          <span>Especialidades</span>
+        </a>
+
+        <div class="nav-grupo-exp" id="grupo-formacion">
+          <button class="nav-item" id="btn-grupo-formacion" aria-expanded="false" aria-controls="sub-formacion">
+            <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M2 6h20v12H2z"/><path d="M7 12h2M11 12h2M15 12h2M7 15h6"/></svg>
+            <span>Formación y Acreditaciones</span>
+            <span class="nav-flecha" aria-hidden="true">▶</span>
+          </button>
+          <div class="nav-sub" id="sub-formacion">
+            <a class="nav-item" href="#/capacitaciones" data-ruta="capacitaciones">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M2 6h20v12H2z"/><path d="M7 12h2M11 12h2M15 12h2M7 15h6"/></svg>
+              <span>Capacitaciones</span>
+            </a>
+            <a class="nav-item" href="#/credenciales" data-ruta="credenciales">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 15h4M7 12h2"/></svg>
+              <span>Credenciales</span>
+            </a>
+            <a class="nav-item" href="#/licencias" data-ruta="licencias">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M9 12h6M9 16h4M10 8h4"/><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/></svg>
+              <span>Licencias</span>
+            </a>
+          </div>
+        </div>
+        <a class="nav-item" href="#/unidades" data-ruta="unidades">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.3 11 16.7 7M7.3 13l9.4 4"/></svg>
+          <span>Unidades</span>
+        </a>
+        <a class="nav-item" href="#/reportes" data-ruta="reportes">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>
+          <span>Reportes</span>
+        </a>
+        <a class="nav-item" href="#/biblioteca" data-ruta="biblioteca">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h13"/><path d="M8 7h7M8 11h7"/></svg>
+          <span>Biblioteca</span>
+        </a>
+
+        <div class="nav-grupo-exp" id="grupo-administracion">
+          <button class="nav-item" id="btn-grupo-administracion" aria-expanded="false" aria-controls="sub-administracion">
+            <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+            <span>Administración</span>
+            <span class="nav-flecha" aria-hidden="true">▶</span>
+          </button>
+          <div class="nav-sub" id="sub-administracion">
+            <a class="nav-item" href="#/historial" data-ruta="historial">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+              <span>Historial</span>
+            </a>
+            <a class="nav-item" href="#/usuarios" data-ruta="usuarios">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 4-6 8-6s7.2 2 8 6"/></svg>
+              <span>Usuarios</span>
+            </a>
+            <a class="nav-item" href="#/configuracion" data-ruta="configuracion">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+              <span>Configuración</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+      <div class="sidebar-pie">Versión <span id="app-version">—</span></div>
+    </aside>
+
+    <main class="content" id="content">
+      <section class="page" id="page-dashboard" hidden></section>
+      <section class="page" id="page-voluntarios" hidden></section>
+      <section class="page" id="page-ficha" hidden></section>
+      <section class="page" id="page-servicios" hidden></section>
+      <section class="page" id="page-asistencia" hidden></section>
+      <section class="page" id="page-inventario" hidden></section>
+      <section class="page" id="page-entregas" hidden></section>
+      <section class="page" id="page-catalogo" hidden></section>
+      <section class="page" id="page-historial" hidden></section>
+      <section class="page" id="page-configuracion" hidden></section>
+      <section class="page" id="page-grados" hidden></section>
+      <section class="page" id="page-especialidades" hidden></section>
+      <section class="page" id="page-credenciales" hidden></section>
+      <section class="page" id="page-capacitaciones" hidden></section>
+      <section class="page" id="page-unidades" hidden></section>
+      <section class="page" id="page-licencias" hidden></section>
+      <section class="page" id="page-reportes" hidden></section>
+      <section class="page" id="page-usuarios" hidden></section>
+      <section class="page" id="page-biblioteca" hidden></section>
+    </main>
+  </div>
+
+  <div id="toast-container" aria-live="polite"></div>
+  <div id="modal-root"></div>
+
+  <?!= include('13_UI_App'); ?>
+  <?!= include('14_UI_Dashboard'); ?>
+  <?!= include('15_UI_Voluntarios'); ?>
+  <?!= include('18_UI_Ficha'); ?>
+  <?!= include('20_UI_Catalogo'); ?>
+  <?!= include('16_UI_Inventario'); ?>
+  <?!= include('17_UI_Entregas'); ?>
+  <?!= include('19_UI_Modulos'); ?>
+  <?!= include('22_UI_GradosCargos'); ?>
+  <?!= include('23_UI_Especialidades'); ?>
+  <?!= include('24_UI_Credenciales'); ?>
+  <?!= include('25_UI_Capacitaciones'); ?>
+  <?!= include('26_UI_Unidades'); ?>
+  <?!= include('29_UI_Licencias'); ?>
+  <?!= include('27_UI_Reportes'); ?>
+  <?!= include('28_UI_Usuarios'); ?>
+  <?!= include('13_UI_Parches'); ?>
+  <?!= include('32_UI_Biblioteca'); ?>
+</body>
+</html>

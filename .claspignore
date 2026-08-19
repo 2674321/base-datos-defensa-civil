@@ -1,0 +1,9 @@
+**/.claspignore
+**/.git/**
+**/node_modules/**
+**/.gitignore
+**/*.md
+**/opencode.json
+**/.clasp.json
+**/Defensa Civil – Al servicio de la ciudadaní.html
+**/Defensa Civil – Al servicio de la ciudadaní_files/**

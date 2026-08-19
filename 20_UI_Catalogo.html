@@ -1,0 +1,217 @@
+<script>/* ============ PÁGINA CATÁLOGO ============
+   Tipos de elemento (equipamiento): listar, crear, editar y activar/desactivar.
+   Backend: buscarElementos / crearElemento / actualizarElemento (sin cambios). */
+
+var CatalogoModule = (function () {
+  'use strict';
+
+  var cont = null;
+  var lista = [];
+  var tipos = [];
+  var consulta = '';
+
+  function siNo(v) { return v ? 'Sí' : 'No'; }
+
+  function cargarTipos() {
+    return App.memo('config', 60000, function () { return App.pedir('obtenerConfiguracion'); })
+      .then(function (cfg) {
+        tipos = [];
+        for (var i = 0; i < cfg.length; i++) {
+          if (cfg[i].parametro === 'TIPOS_ELEMENTO') {
+            tipos = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+          }
+        }
+      })
+      .catch(function () { tipos = []; });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Catálogo de elementos</h1>' +
+      '<p class="page-sub">Tipos de equipamiento disponibles para inventario y entregas</p></div>' +
+      '<div class="page-acciones"><button class="btn btn-primario" id="cat-nuevo">' + App.icono('mas') + 'Nuevo elemento</button></div>';
+    cont.appendChild(cabecera);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cabecera">' +
+      '<div class="buscador" style="width:100%;max-width:320px">' + App.icono('buscar') +
+      '<input class="input" id="cat-buscar" placeholder="Buscar por nombre, tipo o ID…" aria-label="Buscar elemento"></div>' +
+      '<span class="texto-dim" id="cat-total"></span>' +
+      '</div><div class="card-cuerpo sin-pad" id="cat-cuerpo"></div>';
+    cont.appendChild(card);
+
+    document.getElementById('cat-nuevo').addEventListener('click', abrirNuevo);
+    document.getElementById('cat-buscar').addEventListener('input', App.debounce(function () {
+      consulta = this.value;
+      renderLista();
+    }, 250));
+
+    renderLista();
+  }
+
+  function renderLista() {
+    var cuerpo = document.getElementById('cat-cuerpo');
+    if (!cuerpo) return;
+    var total = document.getElementById('cat-total');
+    if (total) total.textContent = lista.length + (lista.length === 1 ? ' elemento' : ' elementos');
+
+    var q = consulta.trim().toLowerCase();
+    var filtrados = lista.filter(function (c) {
+      if (!q) return true;
+      return String(c.elemento).toLowerCase().indexOf(q) !== -1 ||
+             String(c.tipo).toLowerCase().indexOf(q) !== -1 ||
+             String(c.id).toLowerCase().indexOf(q) !== -1;
+    });
+
+    if (!filtrados.length) {
+      cuerpo.innerHTML = App.empty('catalogo', consulta ? 'Sin resultados para "' + consulta + '"' : 'Aún no hay elementos',
+        consulta ? 'Prueba con otro término de búsqueda.' : 'Crea el primer tipo de elemento con el botón "Nuevo elemento".');
+      return;
+    }
+
+    var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>ID</th><th>Elemento</th><th>Tipo</th><th>Talla</th><th>Devolución</th><th>Estado</th>' +
+      '<th style="text-align:right">Acciones</th></tr></thead><tbody>';
+    for (var i = 0; i < filtrados.length; i++) {
+      var c = filtrados[i];
+      html += '<tr>' +
+        '<td class="fuerte num">' + App.h(c.id) + '</td>' +
+        '<td class="fuerte">' + App.h(c.elemento) + '</td>' +
+        '<td>' + App.h(c.tipo || '—') + '</td>' +
+        '<td>' + siNo(c.requiereTalla) + '</td>' +
+        '<td>' + siNo(c.requiereDevolucion) + '</td>' +
+        '<td>' + (c.activo ? App.badge('Activo', 'ok') : App.badge('Inactivo', 'gris')) + '</td>' +
+        '<td><div class="acciones">' +
+        '<button class="btn-icono" data-editar="' + App.h(c.id) + '" title="Editar" aria-label="Editar ' + App.h(c.elemento) + '">' + App.icono('editar') + '</button>' +
+        '<button class="btn-icono ' + (c.activo ? 'rojo' : '') + '" data-alternar="' + App.h(c.id) + '" title="' + (c.activo ? 'Desactivar' : 'Activar') + '" aria-label="' + (c.activo ? 'Desactivar' : 'Activar') + ' ' + App.h(c.elemento) + '">' + (c.activo ? App.icono('x') : App.icono('check')) + '</button>' +
+        '</div></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    cuerpo.innerHTML = html;
+
+    cuerpo.querySelectorAll('[data-editar]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = lista.find(function (c) { return c.id === this.getAttribute('data-editar'); }, b);
+        if (item) abrirEditar(item);
+      });
+    });
+    cuerpo.querySelectorAll('[data-alternar]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-alternar');
+        var item = lista.find(function (c) { return c.id === id; });
+        if (item) alternar(item);
+      });
+    });
+  }
+
+  function formulario(valores) {
+    var optTipos = tipos.map(function (t) {
+      return '<option value="' + App.h(t) + '"' + (valores.tipo === t ? ' selected' : '') + '>' + App.h(t) + '</option>';
+    }).join('');
+    return '<div class="campo"><label for="cat-form-elemento">Elemento *</label>' +
+      '<input class="input" id="cat-form-elemento" value="' + App.h(valores.elemento || '') + '" placeholder="Ej.: POLERA" required></div>' +
+      '<div class="campo"><label for="cat-form-tipo">Tipo</label>' +
+      '<select class="select" id="cat-form-tipo"><option value="">— Sin tipo —</option>' + optTipos + '</select></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label><input type="checkbox" id="cat-form-talla"' + (valores.requiereTalla ? ' checked' : '') + '> Requiere talla</label></div>' +
+      '<div class="campo"><label><input type="checkbox" id="cat-form-devolucion"' + (valores.requiereDevolucion ? ' checked' : '') + '> Requiere devolución</label></div>' +
+      '</div>' +
+      '<div class="campo"><label for="cat-form-obs">Observaciones</label>' +
+      '<textarea class="textarea" id="cat-form-obs" rows="2" placeholder="Opcional">' + App.h(valores.observaciones || '') + '</textarea></div>';
+  }
+
+  function abrirNuevo() {
+    var m = App.modal({
+      titulo: 'Nuevo elemento',
+      ancho: '',
+      cuerpo: formulario({ requiereTalla: true, requiereDevolucion: true }),
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="cat-form-guardar">' + App.icono('check') + 'Crear elemento</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('cat-form-guardar').addEventListener('click', function () {
+      guardar(null, m);
+    });
+  }
+
+  function abrirEditar(item) {
+    var m = App.modal({
+      titulo: 'Editar ' + item.id,
+      cuerpo: formulario(item),
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="cat-form-guardar">' + App.icono('check') + 'Guardar cambios</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('cat-form-guardar').addEventListener('click', function () {
+      guardar(item.id, m);
+    });
+  }
+
+  function guardar(id, m) {
+    var nombre = document.getElementById('cat-form-elemento').value.trim();
+    if (!nombre) { App.toast('El nombre del elemento es obligatorio', 'aviso'); return; }
+    var datos = {
+      elemento: nombre,
+      tipo: document.getElementById('cat-form-tipo').value,
+      requiereTalla: document.getElementById('cat-form-talla').checked,
+      requiereDevolucion: document.getElementById('cat-form-devolucion').checked,
+      observaciones: document.getElementById('cat-form-obs').value.trim()
+    };
+    var guardarBtn = document.getElementById('cat-form-guardar');
+    guardarBtn.disabled = true;
+    var p = id ? App.pedir('actualizarElemento', [id, datos]) : App.pedir('crearElemento', [datos]);
+    p.then(function () {
+      m.cerrar();
+      App.toast(id ? 'Elemento actualizado' : 'Elemento creado', 'ok');
+      App.trasCambio();
+      cargar();
+    }).catch(function (err) {
+      guardarBtn.disabled = false;
+      App.toast(err.message || 'No se pudo guardar', 'error');
+    });
+  }
+
+  function alternar(item) {
+    var accion = item.activo ? 'desactivar' : 'activar';
+    App.confirmar({
+      titulo: accion === 'desactivar' ? 'Desactivar elemento' : 'Activar elemento',
+      mensaje: '¿Seguro que deseas ' + accion + ' "' + item.elemento + '" (' + item.id + ')? Los elementos inactivos no se usan en nuevas entregas.',
+      confirmar: accion === 'desactivar' ? 'Desactivar' : 'Activar',
+      tipo: accion === 'desactivar' ? 'peligro' : ''
+    }).then(function (si) {
+      if (!si) return;
+      App.pedir('actualizarElemento', [item.id, { activo: !item.activo }]).then(function () {
+        App.toast('Elemento ' + accion + 'do', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        App.toast(err.message || 'No se pudo ' + accion, 'error');
+      });
+    });
+  }
+
+  function cargar() {
+    App.pedir('buscarElementos').then(function (res) {
+      lista = res || [];
+      renderLista();
+    }).catch(function (err) {
+      var cuerpo = document.getElementById('cat-cuerpo');
+      if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el catálogo.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargarTipos().then(function () { render(); });
+    }
+  };
+})();
+
+App.registrarPagina('catalogo', CatalogoModule);</script>

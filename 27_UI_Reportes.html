@@ -1,0 +1,171 @@
+<script>/* ============ PÁGINA: REPORTES (V2) ============
+   Reporte general (totales), nómina oficial y alertas institucionales
+   (backend 34_Reportes.js). */
+
+var ReportesModule = (function () {
+  'use strict';
+  var cont = null;
+  var pestaña = 'general';
+  var cfgEstados = [];
+
+  function cargarConfig() {
+    var antes = cfgEstados.join(',');
+    return App.memo('config', 60000, function () { return App.pedir('obtenerConfiguracion'); })
+      .then(function (cfg) {
+        for (var i = 0; i < (cfg || []).length; i++) {
+          if (cfg[i].parametro === 'ESTADOS') cfgEstados = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        }
+        if (antes !== cfgEstados.join(',') && pestaña === 'nomina') pintar();
+      })
+      .catch(function () {});
+  }
+
+  function estadosUI() { return cfgEstados.length ? cfgEstados : ['Activo', 'Inactivo', 'Suspendido', 'Egresado']; }
+
+  function opcionesLista(lista) {
+    if (!lista.length) return '<option value="">—</option>';
+    return lista.map(function (v) { return '<option>' + App.h(v) + '</option>'; }).join('');
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Reportes</h1>' +
+      '<p class="page-sub">Reporte general, nómina institucional y alertas</p></div>';
+    cont.appendChild(cabecera);
+
+    var tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    tabs.innerHTML =
+      '<button class="tab" data-tab="general">General</button>' +
+      '<button class="tab" data-tab="nomina">Nómina</button>' +
+      '<button class="tab" data-tab="alertas">Alertas</button>';
+    cont.appendChild(tabs);
+    tabs.querySelectorAll('.tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        pestaña = b.getAttribute('data-tab');
+        tabs.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('activa'); });
+        b.classList.add('activa');
+        pintar();
+      });
+    });
+    pintar();
+  }
+
+  function pintar() {
+    var anterior = cont.querySelector('.card');
+    if (anterior) anterior.remove();
+    var card = document.createElement('div');
+    card.className = 'card';
+    cont.appendChild(card);
+    card.innerHTML = '<div class="card-cuerpo"><div class="skeleton" style="height:64px"></div></div>';
+
+    if (pestaña === 'general') pintarGeneral(card);
+    else if (pestaña === 'nomina') pintarNomina(card);
+    else pintarAlertas(card);
+  }
+
+  function tablaSimple(titulo, mapa) {
+    var claves = Object.keys(mapa || {}).sort();
+    if (!claves.length) return '<tr><td class="aviso-fila" colspan="2">Sin datos</td></tr>';
+    return claves.map(function (k) {
+      return '<tr><td class="fuerte">' + App.h(k) + '</td><td class="num">' + App.h(mapa[k]) + '</td></tr>';
+    }).join('');
+  }
+
+  function pintarGeneral(card) {
+    App.pedir('obtenerReporteGeneralV2').then(function (d) {
+      var t = d.totales;
+      var a = d.alertas;
+      var total = t.voluntarios || 0;
+      card.innerHTML =
+        '<div class="card-cuerpo">' +
+        '<div class="rejilla-kpi">' +
+        '<div class="stat-card"><span class="stat-ico ok">' + App.icono('voluntarios') + '</span><div><strong>' + total + '</strong><span class="stat-titulo">Voluntarios</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico info">' + App.icono('check') + '</span><div><strong>' + (t.activos || 0) + '</strong><span class="stat-titulo">Activos</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('documento') + '</span><div><strong>' + (a.credencialesPorVencer || 0) + '</strong><span class="stat-titulo">Credenciales por vencer/vencidas</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('documento') + '</span><div><strong>' + (a.capacitacionesVencidas || 0) + '</strong><span class="stat-titulo">Capacitaciones vencidas</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('paquete') + '</span><div><strong>' + (a.devolucionesPendientes || 0) + '</strong><span class="stat-titulo">Entregas pendientes de devolución</span></div></div>' +
+        '</div>' +
+        '<div class="rejilla-2" style="margin-top:var(--esp-3)">' +
+        '<div class="card card-elevated"><div class="card-cabecera"><strong>Por estado</strong></div><div class="card-cuerpo sin-pad"><table class="tabla"><tbody>' + tablaSimple('', t.porEstado) + '</tbody></table></div></div>' +
+        '<div class="card card-elevated"><div class="card-cabecera"><strong>Por categoría</strong></div><div class="card-cuerpo sin-pad"><table class="tabla"><tbody>' + tablaSimple('', t.porCategoria) + '</tbody></table></div></div>' +
+        '<div class="card card-elevated"><div class="card-cabecera"><strong>Por grado</strong></div><div class="card-cuerpo sin-pad"><table class="tabla"><tbody>' + tablaSimple('', t.porGrado) + '</tbody></table></div></div>' +
+        '<div class="card card-elevated"><div class="card-cabecera"><strong>Por cargo</strong></div><div class="card-cuerpo sin-pad"><table class="tabla"><tbody>' + tablaSimple('', t.porCargo) + '</tbody></table></div></div>' +
+        '<div class="card card-elevated"><div class="card-cabecera"><strong>Por área</strong></div><div class="card-cuerpo sin-pad"><table class="tabla"><tbody>' + tablaSimple('', t.porArea) + '</tbody></table></div></div>' +
+        '</div></div>';
+    }).catch(function (err) {
+      card.innerHTML = App.alerta('critica', '<strong>No se pudo generar el reporte general.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function pintarNomina(card) {
+    card.innerHTML = '<div class="card-cabecera"><strong>Nómina institucional</strong>' +
+      '<select class="select" id="rep-n-filtro" style="width:auto" aria-label="Filtrar por estado">' +
+      '<option value="">Todos los estados</option>' + opcionesLista(estadosUI()) +
+      '</select></div><div class="card-cuerpo sin-pad" id="rep-n-cuerpo"></div>';
+    pintarNominaTabla({});
+    document.getElementById('rep-n-filtro').addEventListener('change', function () {
+      pintarNominaTabla({ estado: this.value });
+    });
+  }
+
+  function pintarNominaTabla(filtros) {
+    var cuerpo = document.getElementById('rep-n-cuerpo');
+    if (!cuerpo) return;
+    cuerpo.innerHTML = '<div class="skeleton" style="height:64px"></div>';
+    App.pedir('obtenerNominaV2', [filtros]).then(function (res) {
+      var items = res || [];
+      if (!items.length) { cuerpo.innerHTML = App.empty('nomina', 'Sin voluntarios', 'No hay voluntarios que coincidan con el filtro.'); return; }
+      cuerpo.innerHTML = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+        '<th>RUN</th><th>Nombre</th><th>Estado</th><th>Categoría</th><th>Grado</th><th>Cargo</th><th>Área</th><th>Antigüedad</th></tr></thead><tbody>' +
+        items.map(function (x) {
+          var claseEstado = { 'Activo': 'ok', 'Suspendido': 'aviso', 'Egresado': 'peligro', 'Inactivo': 'gris' };
+          return '<tr>' +
+            '<td class="num">' + App.h(x.run || '—') + '</td>' +
+            '<td class="fuerte">' + App.h(x.nombre) + '</td>' +
+            '<td>' + App.badge(x.estado, claseEstado[x.estado] || 'neutro') + '</td>' +
+            '<td>' + App.h(x.categoria || '—') + '</td>' +
+            '<td>' + App.h(x.grado || '—') + '</td>' +
+            '<td>' + App.h(x.cargo || '—') + '</td>' +
+            '<td>' + App.h(x.area || '—') + '</td>' +
+            '<td>' + (x.antiguedadAnios ? x.antiguedadAnios + ' año(s)' : '—') + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }).catch(function (err) {
+      cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo cargar la nómina.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function pintarAlertas(card) {
+    App.pedir('obtenerAlertasV2').then(function (d) {
+      var items = d.alertas || [];
+      card.innerHTML =
+        '<div class="card-cabecera"><strong>Alertas institucionales</strong>' +
+        '<span class="texto-dim">' + d.total + ' alerta(s) · ' + d.criticas + ' crítica(s)</span></div>' +
+        '<div class="card-cuerpo">' +
+        (items.length ?
+          items.map(function (x) {
+            return '<div class="tl-item ' + (x.severidad === 'critica' ? 'error' : 'ok') + '">' +
+              '<div class="tl-fecha">' + App.badge(x.severidad === 'critica' ? 'Crítica' : 'Aviso', x.severidad === 'critica' ? 'rojo' : 'aviso') + ' · ' + App.h(x.modulo) + '</div>' +
+              '<div class="tl-titulo">' + App.h(x.texto) + '</div></div>';
+          }).join('')
+          : App.empty('check', 'Sin alertas', 'No hay alertas institucionales pendientes.')) +
+        '</div>';
+    }).catch(function (err) {
+      card.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar las alertas.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      render();
+      cargarConfig();
+    }
+  };
+})();
+
+App.registrarPagina('reportes', ReportesModule);</script>

@@ -1,0 +1,261 @@
+<script>/* ============ PÁGINA: PERSONAS (V2) ============
+   Maestro de personas + vínculo de voluntario (backend 22_Personas.js). */
+
+var PersonasModule = (function () {
+  'use strict';
+  var cont = null;
+  var lista = [];
+  var consulta = '';
+  var filtroEstado = '';
+  var cfgEstados = [];
+  var cfgCategorias = [];
+
+  function cargarConfig() {
+    var antes = cfgEstados.join(',') + '|' + cfgCategorias.join(',');
+    return App.memo('config', 60000, function () { return App.pedir('obtenerConfiguracion'); })
+      .then(function (cfg) {
+        for (var i = 0; i < (cfg || []).length; i++) {
+          if (cfg[i].parametro === 'ESTADOS') cfgEstados = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+          else if (cfg[i].parametro === 'CATEGORIAS') cfgCategorias = String(cfg[i].valor).split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        }
+        if (antes !== cfgEstados.join(',') + '|' + cfgCategorias.join(',') && lista.length) render();
+      })
+      .catch(function () {});
+  }
+
+  function estadosUI() { return cfgEstados.length ? cfgEstados : ['Activo', 'Inactivo', 'Suspendido', 'Egresado']; }
+  function categoriasUI() { return cfgCategorias.length ? cfgCategorias : ['Aspirante', 'Disponible', 'Voluntario', 'Reserva']; }
+
+  function opcionesLista(lista) {
+    if (!lista.length) return '<option value="">—</option>';
+    return lista.map(function (v) { return '<option>' + App.h(v) + '</option>'; }).join('');
+  }
+
+  function cargar() {
+    App.skeleton(cont, 6);
+    App.pedir('listarPersonasV2').then(function (res) {
+      lista = res || [];
+      render();
+    }).catch(function (err) {
+      cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el registro de personas.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Personas</h1>' +
+      '<p class="page-sub">Personas y su vínculo de voluntario (grado, cargo y área vigentes)</p></div>' +
+      '<div class="page-acciones"><button class="btn btn-primario" id="per-nuevo">' + App.icono('mas') + 'Nueva persona</button></div>';
+    cont.appendChild(cabecera);
+
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="card-cabecera">' +
+      '<div class="buscador" style="flex:1;min-width:180px;max-width:300px">' + App.icono('buscar') +
+      '<input class="input" id="per-buscar" placeholder="Buscar por nombre o RUN…" aria-label="Buscar personas"></div>' +
+      '<select class="select" id="per-filtro" style="width:auto" aria-label="Filtrar por estado">' +
+      '<option value="">Todos los estados</option>' + opcionesLista(estadosUI()) +
+      '</select><span class="texto-dim" id="per-total"></span></div>' +
+      '<div class="card-cuerpo sin-pad" id="per-cuerpo"></div>';
+    cont.appendChild(card);
+
+    document.getElementById('per-nuevo').addEventListener('click', abrirNuevo);
+    document.getElementById('per-buscar').addEventListener('input', App.debounce(function () {
+      consulta = this.value;
+      pintar();
+    }, 250));
+    document.getElementById('per-filtro').addEventListener('change', function () {
+      filtroEstado = this.value;
+      pintar();
+    });
+    pintar();
+  }
+
+  function pintar() {
+    var cuerpo = document.getElementById('per-cuerpo');
+    if (!cuerpo) return;
+    var q = consulta.trim().toLowerCase();
+    var filtrados = lista.filter(function (p) {
+      if (filtroEstado && p.estado !== filtroEstado) return false;
+      if (!q) return true;
+      return (p.nombreCompleto + ' ' + p.run + ' ' + (p.grado || '') + ' ' + (p.cargo || '')).toLowerCase().indexOf(q) !== -1;
+    });
+    document.getElementById('per-total').textContent = filtrados.length + (filtrados.length === 1 ? ' persona' : ' personas');
+    if (!filtrados.length) {
+      cuerpo.innerHTML = App.empty('personas', 'Sin resultados', 'Ajusta la búsqueda o registra una nueva persona.');
+      return;
+    }
+    var claseEstado = { 'Activo': 'ok', 'Suspendido': 'aviso', 'Egresado': 'peligro', 'Inactivo': 'gris' };
+    var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>RUN</th><th>Nombre</th><th>Estado</th><th>Categoría</th><th>Grado</th><th>Cargo</th><th>Área</th><th style="text-align:right">Acciones</th></tr></thead><tbody>';
+    for (var i = 0; i < filtrados.length; i++) {
+      var p = filtrados[i];
+      html += '<tr>' +
+        '<td class="num">' + App.h(p.run || '—') + '</td>' +
+        '<td class="fuerte">' + App.h(p.nombreCompleto) + '</td>' +
+        '<td>' + App.badge(p.estado || '—', claseEstado[p.estado] || 'neutro') + '</td>' +
+        '<td>' + App.h(p.categoria || '—') + '</td>' +
+        '<td>' + App.h(p.grado || '—') + '</td>' +
+        '<td>' + App.h(p.cargo || '—') + '</td>' +
+        '<td>' + App.h(p.area || '—') + '</td>' +
+        '<td><div class="acciones">' +
+        '<button class="btn-icono" data-ver="' + App.h(p.personaId) + '" title="Ver ficha" aria-label="Ver ficha">' + App.icono('documento') + '</button>' +
+        (p.voluntarioId ? '<button class="btn-icono" data-vol="' + App.h(p.voluntarioId) + '" title="Opciones de voluntario" aria-label="Opciones de voluntario">' + App.icono('mas') + '</button>' : '') +
+        '</div></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    cuerpo.innerHTML = html;
+    cuerpo.querySelectorAll('[data-ver]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = filtrados.find(function (p) { return p.personaId === this.getAttribute('data-ver'); }, b);
+        if (item) verDetalle(item);
+      });
+    });
+    cuerpo.querySelectorAll('[data-vol]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var item = filtrados.find(function (p) { return p.voluntarioId === this.getAttribute('data-vol'); }, b);
+        if (item) opcionesVoluntario(item);
+      });
+    });
+  }
+
+  function formulario() {
+    return '<div class="campo-fila">' +
+      '<div class="campo"><label for="per-run">RUN *</label><input class="input" id="per-run" placeholder="12.345.678-9"></div>' +
+      '<div class="campo"><label for="per-fecnac">Fecha nacimiento</label><input class="input" id="per-fecnac" placeholder="dd/mm/aaaa"></div></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="per-nombres">Nombres *</label><input class="input" id="per-nombres"></div></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="per-appaterno">Apellido paterno *</label><input class="input" id="per-appaterno"></div>' +
+      '<div class="campo"><label for="per-apmaterno">Apellido materno</label><input class="input" id="per-apmaterno"></div></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="per-tel">Teléfono</label><input class="input" id="per-tel"></div>' +
+      '<div class="campo"><label for="per-correo">Correo</label><input class="input" id="per-correo" type="email"></div></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="per-direccion">Dirección</label><input class="input" id="per-direccion"></div>' +
+      '<div class="campo"><label for="per-comuna">Comuna</label><input class="input" id="per-comuna"></div></div>' +
+      '<div class="campo-fila">' +
+      '<div class="campo"><label for="per-abo">Grupo ABO</label><select class="select" id="per-abo"><option value="">—</option><option>O</option><option>A</option><option>B</option><option>AB</option></select></div>' +
+      '<div class="campo"><label for="per-rh">Factor Rh</label><select class="select" id="per-rh"><option value="">—</option><option>+</option><option>-</option></select></div>' +
+      '<div class="campo"><label for="per-emerg-nombre">Contacto emergencia</label><input class="input" id="per-emerg-nombre"></div>' +
+      '<div class="campo"><label for="per-emerg-tel">Teléfono emergencia</label><input class="input" id="per-emerg-tel"></div></div>' +
+      '<div class="campo"><label><input type="checkbox" id="per-esvol" checked> Es voluntario de la sede</label></div>' +
+      '<div class="campo-fila" id="per-campos-vol">' +
+      '<div class="campo"><label for="per-estado">Estado</label><select class="select" id="per-estado">' + opcionesLista(estadosUI()) + '</select></div>' +
+      '<div class="campo"><label for="per-categoria">Categoría</label><select class="select" id="per-categoria">' + opcionesLista(categoriasUI()) + '</select></div>' +
+      '<div class="campo"><label for="per-fechaing">Fecha ingreso</label><input class="input" id="per-fechaing" placeholder="dd/mm/aaaa"></div></div>' +
+      '<div class="campo"><label for="per-obs">Observaciones</label><textarea class="textarea" id="per-obs" rows="2"></textarea></div>';
+  }
+
+  function abrirNuevo() {
+    var m = App.modal({
+      titulo: 'Nueva persona',
+      ancho: 'ancho',
+      cuerpo: formulario(),
+      acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="per-guardar">' + App.icono('check') + 'Registrar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('per-esvol').addEventListener('change', function () {
+      document.getElementById('per-campos-vol').style.display = this.checked ? '' : 'none';
+    });
+    document.getElementById('per-guardar').addEventListener('click', function () {
+      var btn = document.getElementById('per-guardar');
+      btn.disabled = true;
+      App.pedir('crearPersonaV2', [{
+        run: document.getElementById('per-run').value,
+        nombres: document.getElementById('per-nombres').value,
+        apPaterno: document.getElementById('per-appaterno').value,
+        apMaterno: document.getElementById('per-apmaterno').value,
+        fechaNacimiento: document.getElementById('per-fecnac').value,
+        telefono: document.getElementById('per-tel').value,
+        correo: document.getElementById('per-correo').value,
+        direccion: document.getElementById('per-direccion').value,
+        comuna: document.getElementById('per-comuna').value,
+        grupoABO: document.getElementById('per-abo').value,
+        factorRh: document.getElementById('per-rh').value,
+        emergenciaNombre: document.getElementById('per-emerg-nombre').value,
+        emergenciaTelefono: document.getElementById('per-emerg-tel').value,
+        voluntario: document.getElementById('per-esvol').checked,
+        estado: document.getElementById('per-estado').value,
+        categoria: document.getElementById('per-categoria').value,
+        fechaIngreso: document.getElementById('per-fechaing').value,
+        observaciones: document.getElementById('per-obs').value
+      }]).then(function (res) {
+        m.cerrar();
+        App.toast('Persona registrada' + (res.voluntarioId ? ' (Vol. ' + res.voluntarioId + ')' : ''), 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo registrar', 'error');
+      });
+    });
+  }
+
+  function verDetalle(p) {
+    var m = App.modal({
+      titulo: p.nombreCompleto,
+      cuerpo: '<div class="rejilla-2">' +
+        '<div class="stat-card"><span class="stat-ico">' + App.icono('voluntarios') + '</span><div><strong>' + App.h(p.run || '—') + '</strong><span class="stat-titulo">RUN</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico">' + App.icono('check') + '</span><div><strong>' + App.h(p.estado || '—') + '</strong><span class="stat-titulo">Estado · ' + App.h(p.categoria || '—') + '</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico info">' + App.icono('usuario') + '</span><div><strong>' + App.h(p.grado || '—') + '</strong><span class="stat-titulo">Grado vigente</span></div></div>' +
+        '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('usuario') + '</span><div><strong>' + App.h(p.cargo || '—') + '</strong><span class="stat-titulo">' + App.h(p.area || 'Sin área') + '</span></div></div>' +
+        '</div>' +
+        '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cuerpo">' +
+        '<table class="tabla detalle"><tbody>' +
+        '<tr><th>Vínculo voluntario</th><td>' + (p.voluntarioId ? 'Vol. N° ' + App.h(p.voluntarioId) : 'No es voluntario') + '</td></tr>' +
+        '<tr><th>Fecha ingreso</th><td>' + App.h(p.fechaIngreso || '—') + '</td></tr>' +
+        '<tr><th>Fecha egreso</th><td>' + App.h(p.fechaEgreso || '—') + '</td></tr>' +
+        '</tbody></table></div></div>',
+      acciones: '<button class="btn btn-primario" data-cerrar-form="1">Cerrar</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+  }
+
+  function opcionesVoluntario(p) {
+    var esEgresado = p.estado === 'Egresado';
+    var cuerpo = '<div class="alerta alerta-info" role="status">' + App.icono('alerta') +
+      '<div><strong>Vol. N° ' + App.h(p.voluntarioId) + ' — ' + App.h(p.nombreCompleto) + '</strong><br>' +
+      'Grado: ' + App.h(p.grado || '—') + ' · Cargo: ' + App.h(p.cargo || '—') + ' · Ingreso: ' + App.h(p.fechaIngreso || '—') + '</div></div>' +
+      '<div class="campo" style="margin-top:var(--esp-3)"><label for="per-op-fecha">Fecha</label><input class="input" id="per-op-fecha" placeholder="dd/mm/aaaa"></div>' +
+      '<div class="campo"><label for="per-op-motivo">Motivo / observación</label><textarea class="textarea" id="per-op-motivo" rows="2"></textarea></div>';
+    var acciones = '<button class="btn btn-secundario" data-cerrar-form="1">Cerrar</button>' +
+      (esEgresado ?
+        '<button class="btn btn-primario" id="per-op-accion">' + App.icono('check') + 'Reactivar voluntario</button>' :
+        '<button class="btn btn-rojo" id="per-op-accion">' + App.icono('alerta') + 'Dar de baja</button>');
+    var m = App.modal({ titulo: esEgresado ? 'Reactivar voluntario' : 'Dar de baja voluntario', cuerpo: cuerpo, acciones: acciones });
+    m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
+    document.getElementById('per-op-accion').addEventListener('click', function () {
+      var btn = document.getElementById('per-op-accion');
+      btn.disabled = true;
+      var fn = esEgresado ? 'reactivarVoluntarioV2' : 'darDeBajaVoluntarioV2';
+      var datos = esEgresado
+        ? { fechaIngreso: document.getElementById('per-op-fecha').value, estado: 'Activo' }
+        : { fechaEgreso: document.getElementById('per-op-fecha').value, motivoEgreso: document.getElementById('per-op-motivo').value };
+      App.pedir(fn, [p.voluntarioId, datos]).then(function () {
+        m.cerrar();
+        App.toast(esEgresado ? 'Voluntario reactivado' : 'Voluntario dado de baja', 'ok');
+        App.trasCambio();
+        cargar();
+      }).catch(function (err) {
+        btn.disabled = false;
+        App.toast(err.message || 'No se pudo completar la operación', 'error');
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      cargar();
+      cargarConfig();
+    }
+  };
+})();
+
+App.registrarPagina('personas', PersonasModule);</script>

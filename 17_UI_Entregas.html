@@ -1,0 +1,894 @@
+<script>/* ============ PÁGINA ENTREGAS ============
+   Asistente guiado de 6 pasos: 1 Voluntario → 2 Elemento → 3 Talla →
+   4 Cantidad → 5 Revisión → 6 Confirmación (+ comprobante imprimible).
+   Historial de entregas con devoluciones (completa/parcial/dañada/extraviada).
+   Backend sin cambios. */
+
+var EntregasModule = (function () {
+  'use strict';
+
+  var cont = null;
+  var paso = 1;
+  var w = {
+    modo: 'multiple',
+    voluntario: null,
+    elemento: null,
+    filas: [],
+    filaSeleccionada: null,
+    cantidad: 1,
+    responsable: '',
+    observaciones: '',
+    resultado: null,
+    // V3.4D — entrega múltiple
+    catalogo: [],
+    inventario: [],
+    seleccion: {},
+    resultadoMultiple: null
+  };
+  var historial = [];
+
+  var PASOS = ['Voluntario', 'Elemento', 'Talla', 'Cantidad', 'Revisión', 'Confirmación'];
+  var PASOS_MULTIPLE = ['Voluntario', 'Elementos', 'Revisión', 'Confirmación'];
+
+  // V3.4D: conjunto institucional (preselección editable, sin entidad backend).
+  var CONJUNTO_UNIFORME_BASICO = [
+    'Botas de combate', 'Polera', 'Blusa', 'Pantalón',
+    'Gorra sin cubrenuca', 'Cinturón de combate', 'Cinturón de vestir'
+  ];
+  var UMBRAL_STOCK_BAJO = 5;
+
+  /* ---- Núcleo del asistente ---- */
+
+  function stepperHtml() {
+    var pasos = w.modo === 'multiple' ? PASOS_MULTIPLE : PASOS;
+    var html = '<div class="stepper" role="tablist" aria-label="Pasos de la entrega">';
+    for (var i = 1; i <= pasos.length; i++) {
+      var cls = i === paso ? 'activo' : (i < paso ? 'completado' : '');
+      html += '<span class="step ' + cls + '"><span class="step-num">' + (i < paso ? '✓' : i) + '</span>' + pasos[i - 1] + '</span>';
+      if (i < pasos.length) html += '<span class="step-linea" aria-hidden="true"></span>';
+    }
+    return html + '</div>';
+  }
+
+  function renderAsistente() {
+    var contenedor = document.getElementById('ent-wizard');
+    if (!contenedor) return;
+    contenedor.innerHTML = stepperHtml() + '<div id="ent-paso" class="paso-animado"></div>';
+    var cuerpo = document.getElementById('ent-paso');
+    if (paso === 1) renderPasoVoluntario(cuerpo);
+    else if (w.modo === 'multiple') {
+      if (paso === 2) renderPasoElementosMultiple(cuerpo);
+      else if (paso === 3) renderPasoRevisionMultiple(cuerpo);
+      else if (paso === 4) renderPasoConfirmacionMultiple(cuerpo);
+    } else if (paso === 2) renderPasoElemento(cuerpo);
+    else if (paso === 3) renderPasoTalla(cuerpo);
+    else if (paso === 4) renderPasoCantidad(cuerpo);
+    else if (paso === 5) renderPasoRevision(cuerpo);
+    else if (paso === 6) renderPasoConfirmacion(cuerpo);
+  }
+
+  function reiniciarWizard() {
+    w = {
+      modo: w ? w.modo : 'multiple',
+      voluntario: w ? w.voluntario : null,
+      elemento: null, filas: [], filaSeleccionada: null, cantidad: 1,
+      responsable: '', observaciones: '', resultado: null,
+      catalogo: [], inventario: [], seleccion: {}, resultadoMultiple: null
+    };
+    paso = 1;
+    renderAsistente();
+  }
+
+  function navPaso(cuerpo, atras, adelanteHtml) {
+    var fila = document.createElement('div');
+    fila.className = 'fila-entre';
+    fila.style.marginTop = 'var(--esp-4)';
+    fila.innerHTML =
+      '<button class="btn btn-secundario" id="ent-atras">' + App.icono('flechaIzq') + (atras || 'Atrás') + '</button>' +
+      (adelanteHtml || '');
+    cuerpo.appendChild(fila);
+    document.getElementById('ent-atras').addEventListener('click', function () {
+      paso = Math.max(1, paso - 1);
+      renderAsistente();
+    });
+  }
+
+  function renderPasoVoluntario(cuerpo) {
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:12px">1 · ¿A quién se entrega?</h2>' +
+      '<div class="buscador" style="max-width:420px;margin-bottom:var(--esp-4)">' + App.icono('buscar') +
+      '<input class="input" id="ent-buscar-vol" placeholder="Buscar por nombre, RUN o N°…" aria-label="Buscar voluntario"></div>' +
+      '<div id="ent-lista-vol"></div>';
+    var listaVol = document.getElementById('ent-lista-vol');
+    listaVol.innerHTML = App.empty('voluntarios', 'Cargando voluntarios…', '');
+    App.pedir('listarPersonasV2').then(function (res) {
+      var activos = (res || []).filter(function (v) {
+        return v.voluntarioId !== null && v.voluntarioId !== undefined && v.estado === 'Activo';
+      });
+      var pintar = function (q) {
+        var filtro = activos.filter(function (v) {
+          if (!q) return true;
+          return String(v.nombreCompleto).toLowerCase().indexOf(q) !== -1 ||
+                 String(v.run).toLowerCase().indexOf(q) !== -1 ||
+                 String(v.voluntarioId) === q;
+        });
+        if (!filtro.length) {
+          listaVol.innerHTML = App.empty('voluntarios', 'Sin resultados', 'No hay voluntarios activos con ese criterio.');
+          return;
+        }
+        var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr><th></th><th>N°</th><th>Voluntario</th><th>RUN</th><th>Cargo</th></tr></thead><tbody>';
+        for (var i = 0; i < filtro.length; i++) {
+          var v = filtro[i];
+          var sel = w.voluntario && w.voluntario.id === String(v.voluntarioId);
+          html += '<tr style="cursor:pointer" data-vol="' + v.voluntarioId + '">' +
+            '<td>' + (sel ? App.icono('check') : '') + '</td>' +
+            '<td class="num">' + v.voluntarioId + '</td>' +
+            '<td class="fuerte">' + App.h(v.nombreCompleto) + '</td>' +
+            '<td class="num">' + App.h(v.run) + '</td>' +
+            '<td>' + App.h(v.cargo || '—') + '</td></tr>';
+        }
+        html += '</tbody></table></div>';
+        listaVol.innerHTML = html;
+        listaVol.querySelectorAll('[data-vol]').forEach(function (tr) {
+          tr.addEventListener('click', function () {
+            var id = tr.getAttribute('data-vol');
+            var v = activos.find(function (x) { return String(x.voluntarioId) === id; });
+            if (!v) return;
+            w.voluntario = { id: String(v.voluntarioId), nombreCompleto: v.nombreCompleto, run: v.run, cargo: v.cargo, estado: v.estado };
+            paso = 2;
+            renderAsistente();
+          });
+        });
+      };
+      pintar('');
+      var buscar = document.getElementById('ent-buscar-vol');
+      buscar.addEventListener('input', App.debounce(function () { pintar(this.value.trim().toLowerCase()); }, 250));
+      if (!activos.length) {
+        listaVol.innerHTML = App.empty('voluntarios', 'Sin voluntarios activos', 'Registra y activa voluntarios para poder entregar equipamiento.');
+      }
+    }).catch(function (err) {
+      listaVol.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar los voluntarios.</strong> ' + App.h(err.message || err));
+    });
+    navPaso(cuerpo, '', '');
+  }
+
+  function renderPasoElemento(cuerpo) {
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:12px">2 · ¿Qué elemento se entrega?</h2>' +
+      '<div class="buscador" style="max-width:420px;margin-bottom:var(--esp-4)">' + App.icono('buscar') +
+      '<input class="input" id="ent-buscar-el" placeholder="Buscar elemento…" aria-label="Buscar elemento"></div>' +
+      '<div id="ent-lista-el"></div>';
+    var listaEl = document.getElementById('ent-lista-el');
+    listaEl.innerHTML = App.empty('catalogo', 'Cargando catálogo…', '');
+    App.pedir('buscarElementos').then(function (res) {
+      var activos = (res || []).filter(function (e) { return e.activo; });
+      var pintar = function (q) {
+        var filtro = activos.filter(function (e) {
+          if (!q) return true;
+          return String(e.elemento).toLowerCase().indexOf(q) !== -1 || String(e.id).toLowerCase().indexOf(q) !== -1;
+        });
+        if (!filtro.length) {
+          listaEl.innerHTML = App.empty('catalogo', 'Sin resultados', 'No hay elementos activos con ese criterio.');
+          return;
+        }
+        var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--esp-3)">';
+        for (var i = 0; i < filtro.length; i++) {
+          var e = filtro[i];
+          var sel = w.elemento && w.elemento.id === e.id;
+          html += '<button class="card" data-el="' + App.h(e.id) + '" style="text-align:left;padding:var(--esp-4);border-color:' + (sel ? 'var(--azul-dc)' : 'var(--borde)') + ';background:' + (sel ? 'var(--azul-dc-blanqueado)' : 'var(--superficie)') + ';cursor:pointer">' +
+            '<div style="font-weight:700;color:var(--texto-1)">' + App.h(e.elemento) + '</div>' +
+            '<div class="texto-dim" style="margin-top:2px">' + App.h(e.id) + (e.tipo ? ' · ' + App.h(e.tipo) : '') + '</div>' +
+            '</button>';
+        }
+        html += '</div>';
+        listaEl.innerHTML = html;
+        listaEl.querySelectorAll('[data-el]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            w.elemento = activos.find(function (e) { return e.id === b.getAttribute('data-el'); });
+            w.filas = [];
+            w.filaSeleccionada = null;
+            w.cantidad = 1;
+            paso = 3;
+            renderAsistente();
+          });
+        });
+      };
+      pintar('');
+      document.getElementById('ent-buscar-el').addEventListener('input', App.debounce(function () { pintar(this.value.trim().toLowerCase()); }, 250));
+      if (!activos.length) {
+        listaEl.innerHTML = App.empty('catalogo', 'Catálogo sin elementos activos', 'Activa elementos en la página Catálogo.');
+      }
+    }).catch(function (err) {
+      listaEl.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el catálogo.</strong> ' + App.h(err.message || err));
+    });
+    navPaso(cuerpo, 'Cambiar voluntario', '');
+  }
+
+  function renderPasoTalla(cuerpo) {
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:4px">3 · Talla y disponibilidad</h2>' +
+      '<p class="page-sub" style="margin-bottom:var(--esp-4)">Stock disponible de ' + App.h(w.elemento.elemento) + ' (' + App.h(w.elemento.id) + ')</p>' +
+      '<div id="ent-lista-tallas"></div>';
+    var area = document.getElementById('ent-lista-tallas');
+    area.innerHTML = App.empty('inventario', 'Consultando stock…', '');
+    App.pedir('obtenerInventario', [{ elementoId: w.elemento.id, estado: 'Disponible' }]).then(function (res) {
+      w.filas = (res || []).filter(function (f) { return f.cantidad > 0; });
+      if (!w.filas.length) {
+        area.innerHTML = App.alerta('aviso', '<strong>Sin stock disponible.</strong> Registra una entrada en Inventario o elige otro elemento.');
+        navPaso(cuerpo, 'Cambiar elemento', '');
+        return;
+      }
+      var porTalla = {};
+      w.filas.forEach(function (f) {
+        var t = f.talla === 'Sin talla' ? 'Sin talla' : f.talla;
+        if (!porTalla[t]) porTalla[t] = { talla: t, total: 0, mejor: f };
+        porTalla[t].total += f.cantidad;
+        if (f.cantidad > porTalla[t].mejor.cantidad) porTalla[t].mejor = f;
+      });
+      var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--esp-3)">';
+      Object.keys(porTalla).forEach(function (t) {
+        var g = porTalla[t];
+        var sel = w.filaSeleccionada && w.filaSeleccionada.talla === g.talla;
+        html += '<button class="card" data-talla="' + App.h(g.talla) + '" style="text-align:left;padding:var(--esp-4);border-color:' + (sel ? 'var(--azul-dc)' : 'var(--borde)') + ';background:' + (sel ? 'var(--azul-dc-blanqueado)' : 'var(--superficie)') + ';cursor:pointer">' +
+          '<div style="font-weight:700">' + App.h(g.talla) + '</div>' +
+          '<div class="chip" style="margin-top:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span>Disponible <span class="cant">' + g.total + '</span></div>' +
+          '</button>';
+      });
+      html += '</div>';
+      area.innerHTML = html;
+      area.querySelectorAll('[data-talla]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var t = b.getAttribute('data-talla');
+          w.filaSeleccionada = porTalla[t].mejor;
+          paso = 4;
+          renderAsistente();
+        });
+      });
+      navPaso(cuerpo, 'Cambiar elemento', '');
+    }).catch(function (err) {
+      area.innerHTML = App.alerta('critica', '<strong>No se pudo consultar el stock.</strong> ' + App.h(err.message || err));
+      navPaso(cuerpo, 'Cambiar elemento', '');
+    });
+  }
+
+  function renderPasoCantidad(cuerpo) {
+    var stock = w.filaSeleccionada.cantidad;
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:4px">4 · Cantidad a entregar</h2>' +
+      '<p class="page-sub" style="margin-bottom:var(--esp-4)">' + App.h(w.elemento.elemento) +
+      (w.filaSeleccionada.talla !== 'Sin talla' ? ' · Talla ' + App.h(w.filaSeleccionada.talla) : '') +
+      ' · Stock disponible en esta línea: <strong>' + stock + '</strong></p>' +
+      '<div class="campo" style="max-width:200px"><label for="ent-cantidad">Cantidad</label>' +
+      '<input class="input" id="ent-cantidad" type="number" min="1" max="' + stock + '" value="' + Math.min(w.cantidad, stock) + '"></div>' +
+      '<div class="alerta alerta-info" id="ent-stock-restante" role="status">' + App.icono('inventario') +
+      '<div>Después de esta entrega quedarán <strong id="ent-restante-valor">' + (stock - Math.min(w.cantidad, stock)) + '</strong> disponible(s) en esta línea.</div></div>';
+    var input = document.getElementById('ent-cantidad');
+    var restante = document.getElementById('ent-restante-valor');
+    var actualizar = function () {
+      var n = parseInt(input.value, 10);
+      if (isNaN(n) || n < 1) n = 1;
+      if (n > stock) n = stock;
+      restante.textContent = stock - n;
+      w.cantidad = n;
+    };
+    input.addEventListener('input', actualizar);
+    navPaso(cuerpo, 'Cambiar talla',
+      '<button class="btn btn-primario" id="ent-siguiente">' + App.icono('chevronR') + 'Revisar entrega</button>');
+    document.getElementById('ent-siguiente').addEventListener('click', function () {
+      actualizar();
+      paso = 5;
+      renderAsistente();
+    });
+  }
+
+  function renderPasoRevision(cuerpo) {
+    var v = w.voluntario;
+    var f = w.filaSeleccionada;
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:12px">5 · Revisión de la entrega</h2>' +
+      '<div class="card" style="padding:var(--esp-4) var(--esp-5);margin-bottom:var(--esp-4)">' +
+      '<div class="boleta-fila"><span class="k">Voluntario</span><span class="v">' + App.h(v.nombreCompleto) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">RUN</span><span class="v">' + App.h(v.run) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Cargo</span><span class="v">' + App.h(v.cargo || '—') + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Elemento</span><span class="v">' + App.h(w.elemento.elemento) + ' (' + App.h(w.elemento.id) + ')</span></div>' +
+      '<div class="boleta-fila"><span class="k">Talla</span><span class="v">' + App.h(f.talla) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Cantidad</span><span class="v">' + w.cantidad + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Stock restante (esta línea)</span><span class="v">' + (f.cantidad - w.cantidad) + '</span></div>' +
+      '</div>' +
+      '<div class="campo"><label for="ent-responsable">Responsable de la entrega</label>' +
+      '<input class="input" id="ent-responsable" value="' + App.h(w.responsable || (App.sesion() && App.sesion().nombre) || '') + '" placeholder="Nombre de quien entrega"></div>' +
+      '<div class="campo"><label for="ent-obs">Observaciones</label><input class="input" id="ent-obs" value="' + App.h(w.observaciones) + '" placeholder="Opcional"></div>';
+    navPaso(cuerpo, 'Cambiar cantidad',
+      '<button class="btn btn-primario" id="ent-confirmar">' + App.icono('check') + 'Confirmar entrega</button>');
+    document.getElementById('ent-confirmar').addEventListener('click', function () {
+      w.responsable = document.getElementById('ent-responsable').value.trim();
+      w.observaciones = document.getElementById('ent-obs').value.trim();
+      var btn = document.getElementById('ent-confirmar');
+      App.botonEstado(btn, 'procesando', 'Registrando…');
+      App.pedir('registrarEntregaV2', [{
+        voluntarioId: v.id,
+        inventarioId: w.filaSeleccionada.id,
+        cantidad: w.cantidad,
+        responsable: w.responsable || null,
+        observaciones: w.observaciones || null
+      }]).then(function (r) {
+        App.botonEstado(btn, 'exito', 'Registrada');
+        App.toast('Entrega registrada correctamente', 'ok');
+        w.resultado = null;
+        paso = 6;
+        renderAsistente();
+        App.pedir('obtenerEntregaV2', [r.id]).then(function (d) {
+          w.resultado = d.entrega;
+          w.resultado.voluntarioObjeto = v;
+          renderAsistente();
+          cargarHistorial();
+        }).catch(function (err) {
+          var cuerpo = document.getElementById('ent-paso');
+          if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo preparar el comprobante.</strong> ' + App.h(err.message || err));
+        });
+      }).catch(function (err) {
+        App.botonEstado(btn, 'normal');
+        App.toast(err.message || 'No se pudo registrar la entrega', 'error');
+      });
+    });
+  }
+
+  function renderPasoConfirmacion(cuerpo) {
+    if (!w.resultado) {
+      cuerpo.innerHTML =
+        '<div class="alerta alerta-info" role="status">' + App.icono('historial') +
+        '<div><strong>Preparando comprobante…</strong></div></div>' +
+        '<div class="cargando" style="padding:var(--esp-6)"><div class="spinner"></div><span>Generando el comprobante de entrega…</span></div>';
+      return;
+    }
+    var r = w.resultado;
+    var v = r.voluntarioObjeto;
+    cuerpo.innerHTML =
+      '<div class="alerta alerta-ok" role="status">' + App.icono('check') +
+      '<div><strong>Entrega registrada correctamente</strong> — comprobante ' + App.h(r.id) + '. Puedes imprimirlo para la firma del voluntario y del responsable.</div></div>' +
+      '<div class="boleta" id="ent-boleta" style="margin-top:var(--esp-5)">' +
+      '<div class="boleta-cab">' +
+      '<div class="boleta-izq">' +
+      '<img class="boleta-logo logo-institucional" alt="Logo Defensa Civil de Chile">' +
+      '<div class="boleta-inst"><span class="b1">DEFENSA CIVIL DE CHILE</span><span class="b2">Sede La Serena · Al servicio de la ciudadanía</span></div>' +
+      '</div>' +
+      '<div class="boleta-der"><div class="boleta-doc">Comprobante de entrega</div><div class="boleta-meta">' + App.h(r.id) + ' · ' + App.h(r.fechaEntrega || '') + '</div></div>' +
+      '</div>' +
+      '<div class="boleta-cuerpo">' +
+      '<div class="boleta-fila"><span class="k">Voluntario</span><span class="v">' + App.h(v.nombreCompleto) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">RUN</span><span class="v">' + App.h(v.run) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Cargo</span><span class="v">' + App.h(v.cargo || '—') + '</span></div>' +
+      '<table class="boleta-tabla"><thead><tr><th>Elemento</th><th>Talla</th><th>Cantidad</th><th>Estado</th></tr></thead>' +
+      '<tbody><tr><td>' + App.h(r.elemento) + '</td><td>' + App.h(r.talla) + '</td><td class="num">' + r.cantidad + '</td><td>' + App.estadoEntrega(r.estado) + '</td></tr></tbody></table>' +
+      (r.observaciones ? '<div class="boleta-fila"><span class="k">Observaciones</span><span class="v">' + App.h(r.observaciones) + '</span></div>' : '') +
+      '<div class="boleta-fila"><span class="k">Responsable</span><span class="v">' + App.h(r.responsable || '—') + '</span></div>' +
+      '</div>' +
+      '<div class="boleta-pie"><div class="firma">' +
+      '<div class="linea">Firma voluntario</div><div class="linea">Firma responsable</div>' +
+      '</div></div></div>';
+    navPaso(cuerpo, '',
+      '<button class="btn btn-secundario" id="ent-imprimir">' + App.icono('imprimir') + 'Imprimir comprobante</button>' +
+      '<button class="btn btn-primario" id="ent-nueva">' + App.icono('mas') + 'Nueva entrega</button>');
+    document.getElementById('ent-imprimir').addEventListener('click', function () {
+      var over = document.createElement('div');
+      over.className = 'modal-overlay';
+      over.style.background = 'transparent';
+      var boleta = document.getElementById('ent-boleta');
+      over.appendChild(boleta.cloneNode(true));
+      document.body.appendChild(over);
+      over.classList.add('imprimir');
+      window.print();
+      setTimeout(function () { over.remove(); }, 500);
+    });
+    document.getElementById('ent-nueva').addEventListener('click', function () {
+      w = { voluntario: null, elemento: null, filas: [], filaSeleccionada: null, cantidad: 1, responsable: '', observaciones: '', resultado: null, modo: w.modo, catalogo: [], inventario: [], seleccion: {}, resultadoMultiple: null };
+      paso = 1;
+      renderAsistente();
+    });
+  }
+
+  /* ---- ENTREGA MÚLTIPLE (V3.4D) ---- */
+
+  function tipoEntrega(f) {
+    return f.requiereDevolucion ? 'Requiere devolución' : 'Bajo cargo';
+  }
+
+  function estadoStock(f) {
+    var n = Number(f.cantidad || 0);
+    if (n <= 0) return { clase: 'sin', texto: 'Sin stock' };
+    if (n <= UMBRAL_STOCK_BAJO) return { clase: 'bajo', texto: 'Stock bajo' };
+    return { clase: 'ok', texto: 'Disponible' };
+  }
+
+  function chipStock(f) {
+    var st = estadoStock(f);
+    var col = st.clase === 'ok' ? 'var(--ok)' : (st.clase === 'bajo' ? 'var(--aviso)' : 'var(--peligro)');
+    return '<span class="chip" style="border-color:' + col + '"><span style="width:8px;height:8px;border-radius:50%;background:' + col + ';display:inline-block"></span>' +
+      st.texto + ' <span class="cant">' + Number(f.cantidad || 0) + '</span></span>';
+  }
+
+  function chipTipo(f) {
+    var dev = f.requiereDevolucion;
+    var col = dev ? 'var(--aviso)' : 'var(--ok)';
+    var ico = dev ? 'devolver' : 'check';
+    return '<span class="chip" title="Tipo definido por el catálogo (autoritativo)" style="border-color:' + col + '">' +
+      App.icono(ico) + (dev ? 'Requiere devolución' : 'Bajo cargo') + '</span>';
+  }
+
+  function renderPasoElementosMultiple(cuerpo) {
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:4px">2 · Elementos a entregar</h2>' +
+      '<p class="page-sub" style="margin-bottom:var(--esp-3)">Selecciona una o más líneas de stock. El <strong>tipo de entrega lo define el catálogo</strong> (badge por fila); el tipo general es solo una ayuda para filtrar.</p>' +
+      '<div id="ent-m-msj" style="margin-bottom:var(--esp-3)"></div>' +
+      '<div class="fila-entre" style="flex-wrap:wrap;gap:var(--esp-3);margin-bottom:var(--esp-3)">' +
+      '<div class="buscador" style="flex:1;min-width:190px">' + App.icono('buscar') +
+      '<input class="input" id="ent-m-buscar" placeholder="Buscar elemento…" aria-label="Buscar elemento"></div>' +
+      '<select class="input" id="ent-m-tipo" style="max-width:215px" aria-label="Tipo de entrega (filtro)">' +
+      '<option value="Bajo cargo">Tipo: Bajo cargo (sin devolución)</option>' +
+      '<option value="Requiere devolución">Tipo: Requiere devolución</option>' +
+      '<option value="todos">Tipo: Todos</option></select>' +
+      '<select class="input" id="ent-m-disp" style="max-width:215px" aria-label="Disponibilidad (filtro)">' +
+      '<option value="todos">Disponibilidad: Todas</option>' +
+      '<option value="ok">Disponible</option>' +
+      '<option value="bajo">Stock bajo</option>' +
+      '<option value="sin">Sin stock</option></select>' +
+      '<button class="btn btn-secundario" id="ent-m-conjunto" title="Preselecciona el conjunto UNIFORME BÁSICO (editable, sin stock insuficiente)">' + App.icono('inventario') + 'UNIFORME BÁSICO</button>' +
+      '</div>' +
+      '<div id="ent-m-tabla"></div>';
+    var area = document.getElementById('ent-m-tabla');
+    var msj = document.getElementById('ent-m-msj');
+    area.innerHTML = App.empty('inventario', 'Consultando catálogo y stock…', '');
+
+    Promise.all([App.pedir('buscarElementos'), App.pedir('obtenerInventario')]).then(function (res) {
+      w.catalogo = (res[0] || []).filter(function (e) { return e.activo; });
+      var porEl = {};
+      w.catalogo.forEach(function (e) { porEl[e.id] = e; });
+      w.inventario = (res[1] || []).filter(function (f) {
+        if (String(f.estado || '') !== 'Disponible') return false;
+        var el = porEl[f.elementoId];
+        if (!el) return false;
+        f.requiereTalla = !!el.requiereTalla;
+        f.requiereDevolucion = !!el.requiereDevolucion;
+        f.tipo = el.tipo || '';
+        return true;
+      });
+      if (!w.inventario.length) {
+        area.innerHTML = App.alerta('aviso', '<strong>No hay stock disponible.</strong> Registra una entrada en Inventario para poder entregar.');
+        navPaso(cuerpo, 'Cambiar voluntario', '');
+        return;
+      }
+      var pintar = function () {
+        var q = (document.getElementById('ent-m-buscar').value || '').trim().toLowerCase();
+        var tipo = document.getElementById('ent-m-tipo').value;
+        var disp = document.getElementById('ent-m-disp').value;
+        var filtro = w.inventario.filter(function (f) {
+          if (q && String(f.elemento).toLowerCase().indexOf(q) === -1 && String(f.id).toLowerCase().indexOf(q) === -1) return false;
+          if (tipo !== 'todos' && tipoEntrega(f) !== tipo) return false;
+          var st = estadoStock(f).clase;
+          if (disp === 'ok' && st !== 'ok') return false;
+          if (disp === 'bajo' && st !== 'bajo') return false;
+          if (disp === 'sin' && st !== 'sin') return false;
+          return true;
+        });
+        pintarTabla(filtro);
+      };
+      pintar();
+      document.getElementById('ent-m-buscar').addEventListener('input', App.debounce(pintar, 250));
+      document.getElementById('ent-m-tipo').addEventListener('change', pintar);
+      document.getElementById('ent-m-disp').addEventListener('change', pintar);
+      document.getElementById('ent-m-conjunto').addEventListener('click', aplicarConjunto);
+    }).catch(function (err) {
+      area.innerHTML = App.alerta('critica', '<strong>No se pudo consultar el stock.</strong> ' + App.h(err.message || err));
+    });
+    navPaso(cuerpo, 'Cambiar voluntario', '');
+  }
+
+  function pintarTabla(filtro) {
+    var area = document.getElementById('ent-m-tabla');
+    if (!filtro.length) {
+      area.innerHTML = App.empty('inventario', 'Sin resultados', 'Ninguna línea coincide con los filtros aplicados.');
+      return;
+    }
+    var html = '<div class="tabla-wrap"><table class="tabla ent-tabla"><thead><tr>' +
+      '<th class="ent-col-sel">Sel.</th><th>Elemento</th><th>Talla</th><th>Cantidad</th><th>Tipo</th><th>Stock</th>' +
+      '</tr></thead><tbody>';
+    for (var i = 0; i < filtro.length; i++) {
+      var f = filtro[i];
+      var st = estadoStock(f);
+      var sin = st.clase === 'sin';
+      var sel = w.seleccion[f.id];
+      var checked = sel ? ' checked' : '';
+      var htmlTalla = f.requiereTalla
+        ? '<input class="input ent-talla" type="text" data-inv="' + App.h(f.id) + '" maxlength="30" value="' + App.h(sel ? sel.talla : (f.talla === 'Sin talla' ? '' : f.talla)) + '"' + (sin ? ' disabled' : '') + ' placeholder="Talla">'
+        : '<span class="texto-dim">— / Sin talla</span>';
+      var max = Number(f.cantidad || 0);
+      var htmlCant = sin
+        ? '<span class="texto-dim">—</span>'
+        : '<input class="input ent-cantidad" type="number" min="1" max="' + max + '" value="' + (sel ? sel.cantidad : 1) + '" data-inv="' + App.h(f.id) + '" aria-label="Cantidad de ' + App.h(f.elemento) + '">';
+      html += '<tr class="ent-fila' + (sin ? ' ent-fila-sin' : '') + '"' + (sin ? ' style="opacity:.55"' : '') + '>' +
+        '<td class="ent-col-sel"><input type="checkbox" class="ent-check" data-inv="' + App.h(f.id) + '"' + checked + (sin ? ' disabled' : '') + ' aria-label="Seleccionar ' + App.h(f.elemento) + '"></td>' +
+        '<td class="fuerte">' + App.h(f.elemento) + (f.tipo ? ' <span class="texto-dim">· ' + App.h(f.tipo) + '</span>' : '') + '</td>' +
+        '<td>' + htmlTalla + '</td>' +
+        '<td>' + htmlCant + '</td>' +
+        '<td>' + chipTipo(f) + '</td>' +
+        '<td>' + chipStock(f) + '</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table></div>';
+    area.innerHTML = html;
+    area.querySelectorAll('.ent-check').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var id = cb.getAttribute('data-inv');
+        var f = w.inventario.find(function (x) { return x.id === id; });
+        if (!f) return;
+        if (cb.checked) {
+          w.seleccion[id] = {
+            inventarioId: id, elemento: f.elemento,
+            talla: f.requiereTalla ? (f.talla === 'Sin talla' ? '' : f.talla) : '',
+            cantidad: 1, requiereTalla: f.requiereTalla,
+            requiereDevolucion: f.requiereDevolucion, stock: Number(f.cantidad || 0)
+          };
+          actualizarFilaSeleccion(f.id);
+        } else {
+          delete w.seleccion[id];
+        }
+        var msj = document.getElementById('ent-m-msj');
+        var n = Object.keys(w.seleccion).length;
+        msj.innerHTML = n
+          ? '<div class="alerta alerta-info" role="status">' + App.icono('check') + '<div><strong>' + n + ' elemento(s)</strong> seleccionado(s) — continúa a Revisión cuando esté listo.</div></div>'
+          : '';
+      });
+    });
+    area.querySelectorAll('.ent-cantidad').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var id = inp.getAttribute('data-inv');
+        var s = w.seleccion[id];
+        if (!s) return;
+        var n = parseInt(inp.value, 10);
+        if (isNaN(n) || n < 1) n = 1;
+        if (n > s.stock) n = s.stock;
+        inp.value = n;
+        s.cantidad = n;
+      });
+    });
+    area.querySelectorAll('.ent-talla').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var id = inp.getAttribute('data-inv');
+        var s = w.seleccion[id];
+        if (s) s.talla = inp.value.trim();
+      });
+    });
+  }
+
+  function actualizarFilaSeleccion(id) {
+    var area = document.getElementById('ent-m-tabla');
+    if (!area) return;
+    var inp = area.querySelector('.ent-cantidad[data-inv="' + id + '"]');
+    if (inp) inp.value = 1;
+  }
+
+  function aplicarConjunto() {
+    if (!w.inventario.length) return;
+    var faltantes = [];
+    var aplicados = 0;
+    for (var i = 0; i < CONJUNTO_UNIFORME_BASICO.length; i++) {
+      var nombre = CONJUNTO_UNIFORME_BASICO[i];
+      var f = null;
+      for (var j = 0; j < w.inventario.length; j++) {
+        if (w.inventario[j].elemento.toLowerCase() === nombre.toLowerCase() && Number(w.inventario[j].cantidad || 0) > 0) {
+          f = w.inventario[j];
+          break;
+        }
+      }
+      if (!f) { faltantes.push(nombre); continue; }
+      w.seleccion[f.id] = {
+        inventarioId: f.id, elemento: f.elemento,
+        talla: f.requiereTalla ? (f.talla === 'Sin talla' ? '' : f.talla) : '',
+        cantidad: 1, requiereTalla: f.requiereTalla,
+        requiereDevolucion: f.requiereDevolucion, stock: Number(f.cantidad || 0)
+      };
+      aplicados++;
+    }
+    pintarTabla(w.inventario);
+    var msj = document.getElementById('ent-m-msj');
+    var txt = '<div class="alerta alerta-ok" role="status">' + App.icono('check') +
+      '<div><strong>Conjunto UNIFORME BÁSICO aplicado</strong> — ' + aplicados + ' elemento(s) preseleccionados (editable).' +
+      (faltantes.length ? ' Sin stock disponible: ' + App.h(faltantes.join(', ')) + '.' : '') + '</div></div>';
+    msj.innerHTML = txt;
+  }
+
+  function renderPasoRevisionMultiple(cuerpo) {
+    var v = w.voluntario;
+    var ids = Object.keys(w.seleccion);
+    var items = ids.map(function (k) { return w.seleccion[k]; });
+    var total = items.reduce(function (acc, s) { return acc + (Number(s.cantidad) || 0); }, 0);
+    var filas = items.map(function (s) {
+      return '<tr><td>' + App.h(s.elemento) + '</td><td>' + App.h(s.requiereTalla && s.talla ? s.talla : '— / Sin talla') + '</td>' +
+        '<td class="num">' + (Number(s.cantidad) || 0) + '</td><td>' + (s.requiereDevolucion ? 'Requiere devolución' : 'Bajo cargo') + '</td></tr>';
+    }).join('');
+    cuerpo.innerHTML =
+      '<h2 class="card-titulo" style="margin-bottom:12px">3 · Revisión de la entrega</h2>' +
+      '<div class="card" style="padding:var(--esp-4) var(--esp-5);margin-bottom:var(--esp-4)">' +
+      '<div class="boleta-fila"><span class="k">Voluntario</span><span class="v">' + App.h(v.nombreCompleto) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">RUN</span><span class="v">' + App.h(v.run) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Cargo</span><span class="v">' + App.h(v.cargo || '—') + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Elementos</span><span class="v">' + items.length + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Cantidad total</span><span class="v">' + total + '</span></div>' +
+      '</div>' +
+      '<div class="tabla-wrap" style="margin-bottom:var(--esp-4)"><table class="tabla"><thead><tr>' +
+      '<th>Elemento</th><th>Talla</th><th>Cantidad</th><th>Tipo</th></tr></thead><tbody>' + (filas || '<tr><td colspan="4" class="texto-dim">Sin elementos seleccionados.</td></tr>') + '</tbody></table></div>' +
+      '<div class="campo"><label for="ent-responsable">Responsable de la entrega</label>' +
+      '<input class="input" id="ent-responsable" value="' + App.h(w.responsable || (App.sesion() && App.sesion().nombre) || '') + '" placeholder="Nombre de quien entrega"></div>' +
+      '<div class="campo"><label for="ent-obs">Observaciones</label><input class="input" id="ent-obs" value="' + App.h(w.observaciones) + '" placeholder="Opcional"></div>';
+    navPaso(cuerpo, 'Cambiar elementos',
+      '<button class="btn btn-primario" id="ent-confirmar">' + App.icono('check') + 'Confirmar entrega</button>');
+    document.getElementById('ent-confirmar').addEventListener('click', function () {
+      w.responsable = document.getElementById('ent-responsable').value.trim();
+      w.observaciones = document.getElementById('ent-obs').value.trim();
+      var btn = document.getElementById('ent-confirmar');
+      var n = items.length;
+      App.botonEstado(btn, 'procesando', 'Registrando ' + n + ' elementos…');
+      App.pedir('registrarEntregaMultipleV2', [{
+        voluntarioId: v.id,
+        items: items.map(function (s) {
+          return { inventarioId: s.inventarioId, cantidad: Number(s.cantidad) || 1, talla: s.requiereTalla && s.talla ? s.talla : null };
+        }),
+        responsable: w.responsable || null,
+        observaciones: w.observaciones || null
+      }]).then(function (r) {
+        App.botonEstado(btn, 'exito', 'Registradas');
+        w.resultadoMultiple = r;
+        paso = 4;
+        renderAsistente();
+        App.trasCambio();
+        cargarHistorial();
+      }).catch(function (err) {
+        App.botonEstado(btn, 'normal');
+        App.toast(err.message || 'No se pudo registrar la entrega', 'error');
+      });
+    });
+  }
+
+  function renderPasoConfirmacionMultiple(cuerpo) {
+    var r = w.resultadoMultiple;
+    if (!r) {
+      cuerpo.innerHTML =
+        '<div class="alerta alerta-info" role="status">' + App.icono('historial') +
+        '<div><strong>Preparando comprobante…</strong></div></div>' +
+        '<div class="cargando" style="padding:var(--esp-6)"><div class="spinner"></div><span>Generando el comprobante de entrega…</span></div>';
+      return;
+    }
+    var v = w.voluntario;
+    var ok = r.registradas || [];
+    var errs = r.errores || [];
+    var total = ok.reduce(function (a, x) { return a + (Number(x.cantidad) || 0); }, 0);
+    var hoy = new Date().toLocaleDateString('es-CL');
+    var filas = ok.map(function (x) {
+      return '<tr><td>' + App.h(x.elemento) + '</td><td>' + App.h(x.talla === 'Sin talla' || !x.talla ? '— / Sin talla' : x.talla) + '</td>' +
+        '<td class="num">' + x.cantidad + '</td><td>' + App.estadoEntrega(x.estado) + '</td></tr>';
+    }).join('');
+    var alertaOk = '<div class="alerta alerta-ok" role="status">' + App.icono('check') +
+      '<div><strong>' + ok.length + ' entrega(s) registrada(s) correctamente</strong> — comprobante único con la lista completa. Puedes imprimirlo para la firma del voluntario y del responsable.</div></div>';
+    var alertaErr = errs.length
+      ? '<div class="alerta alerta-critica" role="status">' + App.icono('alerta') +
+        '<div><strong>' + errs.length + ' elemento(s) con error:</strong> ' +
+        App.h(errs.map(function (e) { return (e.elemento || e.inventarioId) + ' — ' + e.error; }).join(' · ')) + '</div></div>'
+      : '';
+    cuerpo.innerHTML = alertaOk + alertaErr +
+      '<div class="boleta" id="ent-boleta" style="margin-top:var(--esp-5)">' +
+      '<div class="boleta-cab">' +
+      '<div class="boleta-izq">' +
+      '<img class="boleta-logo logo-institucional" alt="Logo Defensa Civil de Chile">' +
+      '<div class="boleta-inst"><span class="b1">DEFENSA CIVIL DE CHILE</span><span class="b2">Sede La Serena · Al servicio de la ciudadanía</span></div>' +
+      '</div>' +
+      '<div class="boleta-der"><div class="boleta-doc">Comprobante de entrega múltiple</div><div class="boleta-meta">' + (ok.length ? ok[0].id + ' …' : '') + ' · ' + App.h(hoy) + '</div></div>' +
+      '</div>' +
+      '<div class="boleta-cuerpo">' +
+      '<div class="boleta-fila"><span class="k">Voluntario</span><span class="v">' + App.h(v.nombreCompleto) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">RUN</span><span class="v">' + App.h(v.run) + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Cargo</span><span class="v">' + App.h(v.cargo || '—') + '</span></div>' +
+      '<div class="boleta-fila"><span class="k">Elementos</span><span class="v">' + ok.length + ' · Cantidad total: ' + total + '</span></div>' +
+      '<table class="boleta-tabla"><thead><tr><th>Elemento</th><th>Talla</th><th>Cantidad</th><th>Estado</th></tr></thead>' +
+      '<tbody>' + (filas || '<tr><td colspan="4" class="texto-dim">Sin entregas.</td></tr>') + '</tbody></table>' +
+      (w.observaciones ? '<div class="boleta-fila"><span class="k">Observaciones</span><span class="v">' + App.h(w.observaciones) + '</span></div>' : '') +
+      '<div class="boleta-fila"><span class="k">Responsable</span><span class="v">' + App.h(w.responsable || '—') + '</span></div>' +
+      '</div>' +
+      '<div class="boleta-pie"><div class="firma">' +
+      '<div class="linea">Firma voluntario</div><div class="linea">Firma responsable</div>' +
+      '</div></div></div>';
+    navPaso(cuerpo, '',
+      '<button class="btn btn-secundario" id="ent-imprimir">' + App.icono('imprimir') + 'Imprimir comprobante</button>' +
+      '<button class="btn btn-primario" id="ent-nueva">' + App.icono('mas') + 'Nueva entrega</button>');
+    document.getElementById('ent-imprimir').addEventListener('click', function () {
+      var over = document.createElement('div');
+      over.className = 'modal-overlay';
+      over.style.background = 'transparent';
+      var boleta = document.getElementById('ent-boleta');
+      over.appendChild(boleta.cloneNode(true));
+      document.body.appendChild(over);
+      over.classList.add('imprimir');
+      window.print();
+      setTimeout(function () { over.remove(); }, 500);
+    });
+    document.getElementById('ent-nueva').addEventListener('click', function () {
+      w.seleccion = {};
+      w.resultadoMultiple = null;
+      w.responsable = '';
+      w.observaciones = '';
+      paso = 1;
+      renderAsistente();
+    });
+  }
+
+  /* ---- Historial con devoluciones ---- */
+
+  function cargarHistorial() {
+    App.pedir('obtenerHistorialEntregasV2').then(function (res) {
+      historial = res || [];
+      renderHistorial();
+    }).catch(function (err) {
+      var cuerpo = document.getElementById('ent-historial');
+      if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el historial.</strong> ' + App.h(err.message || err));
+    });
+  }
+
+  function renderHistorial() {
+    var cuerpo = document.getElementById('ent-historial');
+    if (!cuerpo) return;
+    if (!historial.length) {
+      cuerpo.innerHTML = App.empty('entregas', 'Sin entregas registradas', 'Las entregas aparecerán aquí con su estado y opción de devolución.');
+      return;
+    }
+    var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+      '<th>ID</th><th>Fecha</th><th>Voluntario</th><th>Elemento</th><th>Talla</th><th>Cant.</th><th>Estado</th><th></th></tr></thead><tbody>';
+    for (var i = 0; i < historial.length; i++) {
+      var e = historial[i];
+      var cantTxt = e.cantidad + (e.cantidadDevuelta || e.cantidadDanada || e.cantidadExtraviada ?
+        ' <span class="texto-dim">(dev ' + e.cantidadDevuelta + ' / dañ ' + e.cantidadDanada + ' / ext ' + e.cantidadExtraviada + ')</span>' : '');
+      html += '<tr>' +
+        '<td class="fuerte num">' + App.h(e.id) + '</td>' +
+        '<td class="num">' + App.h(e.fechaEntrega || '—') + '</td>' +
+        '<td>' + App.h(e.voluntario) + '</td>' +
+        '<td>' + App.h(e.elemento) + '</td>' +
+        '<td>' + App.h(e.talla === 'Sin talla' ? '—' : e.talla) + '</td>' +
+        '<td class="num">' + cantTxt + '</td>' +
+        '<td>' + App.estadoEntrega(e.estado) + '</td>' +
+        '<td><div class="acciones">' +
+        (e.estado === 'Pendiente de devolución' ?
+          '<button class="btn-icono" data-devolver="' + App.h(e.id) + '" title="Registrar devolución" aria-label="Devolución de ' + App.h(e.id) + '">' + App.icono('devolver') + '</button>' : '') +
+        '</div></td></tr>';
+    }
+    html += '</tbody></table></div>';
+    cuerpo.innerHTML = html;
+    cuerpo.querySelectorAll('[data-devolver]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var e = historial.find(function (x) { return x.id === b.getAttribute('data-devolver'); });
+        if (e) abrirDevolucion(e);
+      });
+    });
+  }
+
+  function abrirDevolucion(e) {
+    var m = App.modal({
+      titulo: 'Devolución — ' + e.id,
+      cuerpo:
+        '<p style="margin:0 0 12px;font-size:13px">' + App.h(e.voluntario) + ' · ' + App.h(e.elemento) +
+        (e.talla && e.talla !== 'Sin talla' ? ' · Talla ' + App.h(e.talla) : '') +
+        ' · <strong>Entregado: ' + e.cantidad + '</strong></p>' +
+        '<div class="campo"><label for="dev-devuelta">Devuelta (buen estado)</label>' +
+        '<input class="input" id="dev-devuelta" type="number" min="0" max="' + e.cantidad + '" value="0"></div>' +
+        '<div class="campo"><label for="dev-danada">Dañada</label>' +
+        '<input class="input" id="dev-danada" type="number" min="0" max="' + e.cantidad + '" value="0"></div>' +
+        '<div class="campo"><label for="dev-extraviada">Extraviada</label>' +
+        '<input class="input" id="dev-extraviada" type="number" min="0" max="' + e.cantidad + '" value="0"></div>' +
+        '<div class="campo"><label for="dev-obs">Observaciones</label><input class="input" id="dev-obs" placeholder="Opcional"></div>' +
+        '<div class="alerta alerta-aviso" role="status">' + App.icono('alerta') +
+        '<div>La suma no puede exceder lo entregado (' + e.cantidad + ').</div></div>',
+      acciones: '<button class="btn btn-secundario" data-cerrar-dev="1">Cancelar</button>' +
+        '<button class="btn btn-primario" id="dev-guardar">' + App.icono('check') + 'Registrar devolución</button>'
+    });
+    m.overlay.querySelector('[data-cerrar-dev]').addEventListener('click', m.cerrar);
+    document.getElementById('dev-guardar').addEventListener('click', function () {
+      var devuelta = parseInt(document.getElementById('dev-devuelta').value, 10) || 0;
+      var danada = parseInt(document.getElementById('dev-danada').value, 10) || 0;
+      var extraviada = parseInt(document.getElementById('dev-extraviada').value, 10) || 0;
+      if (devuelta + danada + extraviada < 1) {
+        App.toast('Indica al menos una cantidad', 'aviso');
+        return;
+      }
+      if (devuelta + danada + extraviada > e.cantidad) {
+        App.toast('La suma excede lo entregado (' + e.cantidad + ')', 'aviso');
+        return;
+      }
+      var btn = document.getElementById('dev-guardar');
+      App.botonEstado(btn, 'procesando', 'Registrando…');
+      App.pedir('registrarDevolucionV2', [e.id, {
+        cantidadDevuelta: devuelta,
+        cantidadDanada: danada,
+        cantidadExtraviada: extraviada,
+        observaciones: document.getElementById('dev-obs').value.trim() || null
+      }]).then(function () {
+        m.cerrar();
+        App.toast('Devolución registrada', 'ok');
+        App.trasCambio();
+        cargarHistorial();
+      }).catch(function (err) {
+        App.botonEstado(btn, 'normal');
+        App.toast(err.message || 'No se pudo registrar la devolución', 'error');
+      });
+    });
+  }
+
+  /* ---- Página ---- */
+
+  function render() {
+    cont.innerHTML = '';
+    var cabecera = document.createElement('div');
+    cabecera.className = 'page-cabecera';
+    cabecera.innerHTML =
+      '<div><h1 class="page-titulo">Entregas</h1>' +
+      '<p class="page-sub">Registro de entregas de equipamiento y comprobante imprimible</p></div>';
+    cont.appendChild(cabecera);
+
+    var wizard = document.createElement('div');
+    wizard.className = 'card';
+    wizard.style.marginBottom = 'var(--esp-5)';
+    wizard.innerHTML =
+      '<div class="card-cabecera" style="align-items:center;gap:var(--esp-4);flex-wrap:wrap">' +
+      '<h2 class="card-titulo">Registrar entrega</h2>' +
+      '<div class="ent-modos" role="radiogroup" aria-label="Tipo de registro">' +
+      '<label class="ent-modo' + (w.modo === 'multiple' ? ' activo' : '') + '"><input type="radio" name="ent-modo" value="multiple"' + (w.modo === 'multiple' ? ' checked' : '') + '>Múltiple</label>' +
+      '<label class="ent-modo' + (w.modo === 'individual' ? ' activo' : '') + '"><input type="radio" name="ent-modo" value="individual"' + (w.modo === 'individual' ? ' checked' : '') + '>Individual</label>' +
+      '</div></div>' +
+      '<div class="card-cuerpo" id="ent-wizard"></div>';
+    cont.appendChild(wizard);
+
+    var radios = wizard.querySelectorAll('input[name="ent-modo"]');
+    radios.forEach(function (r) {
+      r.addEventListener('change', function () {
+        if (r.value === w.modo) return;
+        w.modo = r.value;
+        w.elemento = null; w.filas = []; w.filaSeleccionada = null; w.cantidad = 1;
+        w.seleccion = {}; w.resultadoMultiple = null; w.resultado = null;
+        paso = 1;
+        wizard.querySelectorAll('.ent-modo').forEach(function (l) {
+          l.classList.toggle('activo', l.querySelector('input').value === w.modo);
+        });
+        renderAsistente();
+      });
+    });
+
+    var hist = document.createElement('div');
+    hist.className = 'card';
+    hist.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Historial de entregas</h2></div>' +
+      '<div class="card-cuerpo sin-pad" id="ent-historial"></div>';
+    cont.appendChild(hist);
+
+    renderAsistente();
+    cargarHistorial();
+  }
+
+  return {
+    init: function (contenedor, params) {
+      cont = contenedor;
+      if (params && params.id) {
+        w.voluntario = { id: String(params.id) };
+        paso = 1;
+      }
+      App.skeleton(cont, 5);
+      if (w.voluntario && w.voluntario.id && !w.voluntario.nombreCompleto) {
+        App.pedir('listarPersonasV2').then(function (personas) {
+          var v = (personas || []).find(function (p) {
+            return p.voluntarioId !== null && String(p.voluntarioId) === String(params.id);
+          });
+          if (v) w.voluntario = { id: String(v.voluntarioId), nombreCompleto: v.nombreCompleto, run: v.run, cargo: v.cargo, estado: v.estado };
+          render();
+        }).catch(function () { render(); });
+      } else {
+        render();
+      }
+    }
+  };
+})();
+
+App.registrarPagina('entregas', EntregasModule);</script>
