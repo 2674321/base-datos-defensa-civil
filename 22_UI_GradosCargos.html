@@ -207,7 +207,7 @@ var GradosCargosModule = (function () {
     m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
     document.getElementById('gc-g-guardar').addEventListener('click', function () {
       var btn = document.getElementById('gc-g-guardar');
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Asignando…');
       App.pedir('asignarGradoV2', [voluntarioId, gradoId, {
         fechaDesde: document.getElementById('gc-g-fecha').value,
         resolucion: document.getElementById('gc-g-resolucion').value,
@@ -222,7 +222,7 @@ var GradosCargosModule = (function () {
         App.trasCambio();
         cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo asignar el grado', 'error');
       });
     });
@@ -248,7 +248,7 @@ var GradosCargosModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('gc-c-guardar').addEventListener('click', function () {
         var btn = document.getElementById('gc-c-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           nombre: document.getElementById('gc-c-nombre').value,
           areaId: document.getElementById('gc-c-area').value,
@@ -262,7 +262,7 @@ var GradosCargosModule = (function () {
           App.toast(esNuevo ? 'Cargo creado' : 'Cargo actualizado', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -284,7 +284,7 @@ var GradosCargosModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('gc-a-guardar').addEventListener('click', function () {
         var btn = document.getElementById('gc-a-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           nombre: document.getElementById('gc-a-nombre').value,
           orden: Number(document.getElementById('gc-a-orden').value || 0),
@@ -296,7 +296,7 @@ var GradosCargosModule = (function () {
           App.toast(esNuevo ? 'Área creada' : 'Área actualizada', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -326,7 +326,7 @@ var GradosCargosModule = (function () {
       var vol = document.getElementById('gc-t2-vol').value.trim();
       var cargoId = document.getElementById('gc-t2-cargo').value;
       if (!vol || !cargoId) { App.toast('Indica el N° de voluntario y el cargo', 'aviso'); return; }
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Cerrando…');
       App.pedir('terminarCargoVoluntarioV2', [vol, cargoId, {
         fechaHasta: document.getElementById('gc-t2-fecha').value,
         observaciones: document.getElementById('gc-t2-obs').value
@@ -335,7 +335,7 @@ var GradosCargosModule = (function () {
         App.toast(res && res.yaCerrado ? 'El cargo ya no estaba vigente' : 'Cargo cerrado', res && res.yaCerrado ? 'aviso' : 'ok');
         App.trasCambio();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo cerrar el cargo', 'error');
       });
     });
@@ -359,7 +359,7 @@ var GradosCargosModule = (function () {
       var btn = document.getElementById('gc-a2-guardar');
       var vol = document.getElementById('gc-a2-vol').value.trim();
       if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Asignando…');
       App.pedir('asignarCargoV2', [vol, item.id, {
         fechaDesde: document.getElementById('gc-a2-fecha').value,
         resolucion: document.getElementById('gc-a2-resolucion').value,
@@ -370,7 +370,7 @@ var GradosCargosModule = (function () {
         App.toast('Cargo asignado', 'ok');
         App.trasCambio();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo asignar el cargo', 'error');
       });
     });

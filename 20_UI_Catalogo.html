@@ -163,7 +163,7 @@ var CatalogoModule = (function () {
       observaciones: document.getElementById('cat-form-obs').value.trim()
     };
     var guardarBtn = document.getElementById('cat-form-guardar');
-    guardarBtn.disabled = true;
+    App.botonEstado(guardarBtn, 'procesando', 'Guardando…');
     var p = id ? App.pedir('actualizarElemento', [id, datos]) : App.pedir('crearElemento', [datos]);
     p.then(function () {
       m.cerrar();
@@ -171,7 +171,7 @@ var CatalogoModule = (function () {
       App.trasCambio();
       cargar();
     }).catch(function (err) {
-      guardarBtn.disabled = false;
+      App.botonEstado(guardarBtn, 'normal');
       App.toast(err.message || 'No se pudo guardar', 'error');
     });
   }

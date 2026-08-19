@@ -184,7 +184,7 @@ var EspecialidadesModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('es-f-guardar').addEventListener('click', function () {
         var btn = document.getElementById('es-f-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           nombre: document.getElementById('es-f-nombre').value,
           areaId: document.getElementById('es-f-area').value,
@@ -197,7 +197,7 @@ var EspecialidadesModule = (function () {
           App.toast(esNuevo ? 'Especialidad creada' : 'Especialidad actualizada', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -223,7 +223,7 @@ var EspecialidadesModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('es-s-guardar').addEventListener('click', function () {
         var btn = document.getElementById('es-s-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           especialidadId: document.getElementById('es-s-esp').value,
           nombre: document.getElementById('es-s-nombre').value,
@@ -236,7 +236,7 @@ var EspecialidadesModule = (function () {
           App.toast(esNuevo ? 'Subespecialidad creada' : 'Subespecialidad actualizada', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -275,7 +275,7 @@ var EspecialidadesModule = (function () {
     poblarNiveles();
     document.getElementById('es-a-guardar').addEventListener('click', function () {
       var btn = document.getElementById('es-a-guardar');
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Asignando…');
       App.pedir('asignarEspecialidadV2', [voluntarioId, {
         especialidadId: selEsp.value,
         subespecialidadId: selSub.value,
@@ -288,7 +288,7 @@ var EspecialidadesModule = (function () {
         App.trasCambio();
         verAsignaciones();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo asignar', 'error');
       });
     });

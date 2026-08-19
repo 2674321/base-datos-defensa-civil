@@ -181,7 +181,7 @@ var CredencialesModule = (function () {
       m.overlay.querySelector('[data-cerrar-form]').addEventListener('click', m.cerrar);
       document.getElementById('cr-f-guardar').addEventListener('click', function () {
         var btn = document.getElementById('cr-f-guardar');
-        btn.disabled = true;
+        App.botonEstado(btn, 'procesando', 'Guardando…');
         var datos = {
           nombre: document.getElementById('cr-f-nombre').value,
           emisor: document.getElementById('cr-f-emisor').value,
@@ -192,7 +192,7 @@ var CredencialesModule = (function () {
           App.toast(esNuevo ? 'Credencial creada' : 'Credencial actualizada', 'ok');
           cargar();
         }).catch(function (err) {
-          btn.disabled = false;
+          App.botonEstado(btn, 'normal');
           App.toast(err.message || 'No se pudo guardar', 'error');
         });
       });
@@ -225,7 +225,7 @@ var CredencialesModule = (function () {
       var credId = cred ? cred.id : document.getElementById('cr-a-cred').value;
       if (!vol) { App.toast('Indica el N° de voluntario', 'aviso'); return; }
       if (!credId) { App.toast('Selecciona una credencial', 'aviso'); return; }
-      btn.disabled = true;
+      App.botonEstado(btn, 'procesando', 'Asignando…');
       App.pedir('asignarCredencialV2', [vol, credId, {
         fechaObtencion: document.getElementById('cr-a-fecha').value,
         estado: document.getElementById('cr-a-estado').value,
@@ -239,7 +239,7 @@ var CredencialesModule = (function () {
         if (voluntarioFijo) verPorVoluntario();
         else cargar();
       }).catch(function (err) {
-        btn.disabled = false;
+        App.botonEstado(btn, 'normal');
         App.toast(err.message || 'No se pudo asignar', 'error');
       });
     });
