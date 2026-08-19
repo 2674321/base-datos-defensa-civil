@@ -564,7 +564,18 @@ button { font-family: inherit; }
 
 /* ---------- 15. LOADING ---------- */
 .cargando { display: flex; align-items: center; gap: var(--esp-3); padding: var(--esp-5); color: var(--texto-2); font-size: var(--t-small); justify-content: center; }
-.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--dc-gris-200); border-top-color: var(--primario); animation: girar 0.8s linear infinite; }
+/* V3.4J: display:inline-block es OBLIGATORIO. Sin él, el <span class="spinner"> del splash
+   es inline y width/height se ignoran: el círculo colapsa a una píldora vertical con borde
+   de dos tonos que en PC se percibe como "círculos apilados". Ahora el círculo es un solo
+   anillo giratorio (20px, borde 3px, color institucional), independiente del layout. */
+.spinner {
+  display: inline-block;
+  width: 20px; height: 20px; flex-shrink: 0; vertical-align: -4px;
+  border-radius: 50%;
+  border: 3px solid var(--dc-gris-200);
+  border-top-color: var(--primario);
+  animation: girar 0.8s linear infinite;
+}
 @keyframes girar { to { transform: rotate(360deg); } }
 .spinner-mini {
   display: inline-block; width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px;
