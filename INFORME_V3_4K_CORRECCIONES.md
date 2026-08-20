@@ -7,10 +7,29 @@
 
 ---
 
-## 0. Commits preliminares (0.3 y 0.4)
+## 0. Commits preliminares (0.3 y 0.4) — confirmaciones explícitas
 
-- **0.3 — `7efb975`:** elimina `21_UI_Personas.html` (huérfano definitivo, sin include en Index desde V2). Los harnesses `audit_ui_v2` se actualizaron para no referenciarlo.
-- **0.4 — `a6e1762`:** `.gitignore` ampliado (cambio pendiente reportado por V3.4J, ajeno a la fase anterior). Diff de archivo:
+### 0.1 Punto 0.3 — Eliminación de `21_UI_Personas.html` (CONFIRMADO)
+
+**Sí, el archivo fue eliminado en esta fase (V3.4K).**
+
+- **El archivo SÍ existía al inicio de V3.4K**: está presente en el árbol del último commit de V3.4J (`1d577c4`, FASE V3.4J: informe + AGENTS.md) — `git ls-tree 1d577c4` lo devuelve. La "confirmación previa" de V3.4J nunca se había ejecutado en git: el archivo seguía existiendo en el repo.
+- **Hash del commit que lo eliminó: `7efb975`** ("V3.4K (0.3): elimina 21_UI_Personas.html huérfano definitivamente") — primer commit de la fase, junto a `a6e1762` (0.4).
+- **La ruta `#/personas` NO es navegable** (verificado sobre el árbol actual):
+  - `git grep` de `registrarPagina('personas')`, `data-ruta="personas"`, `href="#/personas"`, `21_UI_Personas`, `page-personas` y `'personas'` en `13_UI_App.html` / `13_UI_Index.html` / `19_UI_Modulos.html` → **cero referencias**.
+  - El archivo tampoco aparece en los includes de `13_UI_Index.html`.
+  - El router (`13_UI_App.html:430`) hace fallback a `dashboard` cuando la ruta no está registrada en `PAGINAS` → una URL manual `#/personas` abre el Panel de control (sin error y sin página fantasma).
+- El backend `22_Personas.js` **no se tocó**: `listarPersonasV2`, `obtenerPersonaV2`, `crearPersonaV2`, `reactivarVoluntarioV2` siguen siendo consumidas por Dashboard, Entregas, Ficha, Voluntarios y Módulos.
+
+### 0.2 Punto 0.4 — `.gitignore` pendiente de V3.4J (CONFIRMADO)
+
+**Se COMMITEÓ en esta fase (V3.4K 0.4), no se revirtió ni sigue pendiente.**
+
+- El cambio pendiente reportado por V3.4J (ampliación del `.gitignore`, ajeno a esa fase) se commiteó aparte en **`a6e1762`** ("chore: .gitignore previo ajeno a V3.4J (OS, node, editor, logs, .clasp.json, temp)"), por instrucción 0.4 de V3.4K.
+- **Estado actual verificado**: `git status --short .gitignore` → **limpio** (sin cambios sin commitear); el último commit que lo toca es `a6e1762`.
+- Contenido final (2 líneas → 21 líneas): OS (`.DS_Store`, `Thumbs.db`, `desktop.ini`), Environment (`.env`, `.env.local`), Node (`node_modules/`), Editor (`.vscode/`, `.idea/`, `*.swp`, `*.swo`, `*~`), Logs (`*.log`), **Clasp credentials** (`.clasp.json` — sensible, no se sube a git), Temporary (`/tmp/`, `*.tmp`).
+
+Diff de archivo (referencia):
 
 ```diff
  node_modules/
