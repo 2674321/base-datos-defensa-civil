@@ -212,7 +212,7 @@ var CredencialesModule = (function () {
         '<div class="campo"><label for="cr-a-estado">Estado</label><select class="select" id="cr-a-estado">' +
         ['Vigente', 'Por vencer', 'Vencida'].map(function (e) { return '<option>' + e + '</option>'; }).join('') + '</select></div>' +
         '<div class="campo"><label for="cr-a-nivel">Nivel (radioaficionado)</label><select class="select" id="cr-a-nivel"><option value="">— Sin nivel —</option>' +
-        ['Aspirante', 'Novicio', 'General'].map(function (n) { return '<option>' + n + '</option>'; }).join('') + '</select></div>' +
+        ['Aspirante', 'Novicio', 'General', 'Superior'].map(function (n) { return '<option>' + n + '</option>'; }).join('') + '</select></div>' +
         '<div class="campo"><label for="cr-a-modelos">Habilitaciones RPAS (separadas por ;)</label><input class="input" id="cr-a-modelos" placeholder="Ej.: MAVIC SERIES; MINI 2"></div>' +
         '<div class="campo"><label for="cr-a-obs">Observaciones</label><textarea class="textarea" id="cr-a-obs" rows="2"></textarea></div>',
       acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
