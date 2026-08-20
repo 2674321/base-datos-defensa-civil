@@ -2,6 +2,21 @@
 
 > OpenCode carga este archivo automáticamente en cada sesión (colócalo en la raíz del repo y súbelo a git). Está afinado para trabajar con **DeepSeek V4 Flash gratuito (OpenCode Zen)**: rápido y barato, pero con ventana de contexto reducida en el tier gratis y más tendencia a "inventar" APIs que un modelo grande. Las reglas de abajo compensan eso.
 
+## DECISIONES PERMANENTES — NO MODIFICAR SIN APROBACIÓN EXPLÍCITA
+
+> **Regla de vigencia:** Estas decisiones aplican a TODA fase futura por defecto. Si una fase futura no las repite en su propio prompt, eso NO significa que estén abiertas a cambio — siguen vigentes. Solo se pueden modificar si el prompt de una fase las menciona EXPLÍCITAMENTE como algo a cambiar, con aprobación del usuario.
+
+> **Verificación:** cada decisión fue reconstruida desde el historial (INFORME_V3.4*_CORRECCIONES.md, ESTADO_PROYECTO_V3_4L.md, commits) y **verificada contra el código real** el 2026-08-20 (post-V3.4N). El ítem indica dónde vive hoy la decisión. Cualquier discrepancia entre historial y código se reporta en el informe de la fase, NO se corrige en silencio.
+
+1. **Jefe de Sede = GRADO real** (no distintivo, no solo cargo): `GRADOS_V2` (00_Constantes.js:425) `['Jefe de sede', 2, '3 barras', 'OFICIAL', true]` — Origen=OFICIAL, Activo, insignia '3 barras' (UNI 2018). Además es cargo/condición de mando: el cargo 'Jefe de Sede / Jefe Local' coexiste (`CARGOS_V2`, 00_Constantes.js:449) y el grado lleva su distintivo/insignia propio. META: entrada GRADO g-7 (13_UI_Parches.html:28). Establecida: V3.4H (constantes) + V3.4K 0.2 (META; se eliminó el distintivo d-2 origen CARGO).
+2. **SCI (Sistema de Comando de Incidentes) = especialidad INTERNA** (no RECONOCIDA), área A-3 Operaciones, con niveles agrupados en el campo `niveles`: `Introductorio; Básico Online; Básico; Intermedio; Avanzado` (00_Constantes.js:475; META e-7, 13_UI_Parches.html:40). Los niveles NO son subespecialidades (V3.4F las creó como subs; V3.4G las colapsó a la especialidad).
+3. **Radioaficionado = subespecialidad de Telecomunicaciones** (INTERNO) con 4 niveles: `Aspirante; Novicio; General; Superior` (00_Constantes.js:487; META s-1, 13_UI_Parches.html:41). V3.4M alineó META y dropdown de Credenciales a los 4 niveles (antes solo 3).
+4. **Operador RPAS = especialidad única** (INTERNO) (00_Constantes.js:472); los modelos de drone habilitados NO son subespecialidades de catálogo — son campo de datos de la asignación voluntario-credencial: `VolCredenciales.modelosHabilitados` (col 10, 00_Constantes.js:326). Las 4 habilitaciones RPAS como subespecialidades fueron eliminadas (V3.4G).
+5. **Administración Logística reemplazada por 3 especialidades OFICIAL independientes** (área A-4): Administrador de Albergues, Administrador de Centros de Acopio, Operador de Equipos Logísticos (00_Constantes.js:476-478). La original 'Administración Logística' queda Inactiva (`activo=false`) pero NO se elimina del catálogo/historial (00_Constantes.js:471). Establecida: V3.4C.
+6. **Sanidad renombrada a 'Auxiliar de Sanidad'** (00_Constantes.js:469; área Sanidad; renombre por ID en migración V3.4D/F antes del seed; niveles: Auxiliar; TENS; Enfermero Universitario; Medico).
+7. **Catálogo de credenciales = plantilla-only**: solo `{id, nombre, emisor, estado}` con `ESTADOS_TIPO_CREDENCIAL = ['Activo','Inactivo']` (00_Constantes.js:516; `listarCredencialesV2`, 25_Credenciales.js:36-52). NUNCA muestra número, fechas ni datos de instancia individual — esos viven únicamente en la asignación voluntario-credencial (nivel, modelosHabilitados, fecha, vigencia/revocación). Establecida: V3.4H.
+8. **Sección 'Personas' eliminada** (fusionada con Voluntarios): 21_UI_Personas.html borrado en V3.4K (commit 7efb975); la ruta `#/personas` cae a dashboard. `22_Personas.js` SÍ se conserva — lo consumen 5 páginas frontend (14_UI_Dashboard, 15_UI_Voluntarios, 17_UI_Entregas, 18_UI_Ficha, 19_UI_Modulos). ⚠️ El enunciado histórico decía "6+ archivos" (incluía 21_UI_Personas.html ya eliminado) — ver informe V3.4N (inconsistencia reportada, no corregida).
+
 ## 0. Contexto real del proyecto
 
 - **Organización:** Defensa Civil de Chile, Sede La Serena.

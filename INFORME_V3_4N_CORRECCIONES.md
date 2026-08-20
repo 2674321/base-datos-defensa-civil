@@ -62,12 +62,29 @@ Los skeletons/`App.cargando()` se conservan en cada carga perezosa (primer abrir
 
 Las suites históricas (test_v2, test_v31, test_core…) **no existen en el repo** (se generaban en-sesión, nunca se commiteaban; en disco solo hay `09_Pruebas.js` del backend). **Parcialmente resuelto:** se creó la carpeta `v1/tests/` con el primer harness versionado — `test_v34n.js` (70 asserts: CSS popover, toggle mini con DOM, memo() por sección, Biblioteca colapsable con DOM, versión 0.8.9) — commiteado como "baseline: suite de regresión versionada", y `**/tests/**` agregado a `.claspignore` para que clasp nunca suba harnesses. **Pendiente explícito:** las suites anteriores a V3.4N no existen ni en git ni en disco — no son recuperables sin reescribirlas; se sugiere regenerarlas por fases en `tests/` si se requiere cobertura histórica.
 
+## f. Decisiones permanentes de modelo de datos — verificación contra código real (2026-08-20)
+
+Se creó la sección **`## DECISIONES PERMANENTES — NO MODIFICAR SIN APROBACIÓN EXPLÍCITA`** al inicio de AGENTS.md (regla de vigencia para TODAS las fases futuras + 8 decisiones verificadas una por una contra el código actual, no de memoria):
+
+| # | Decisión | Verificación en código actual | Estado |
+|---|---|---|---|
+| 1 | Jefe de Sede = grado real OFICIAL/Activo, también cargo/condición de mando con insignia propia | `GRADOS_V2` 00_Constantes.js:425 `['Jefe de sede',2,'3 barras','OFICIAL',true]`; cargo 'Jefe de Sede / Jefe Local' 00_Constantes.js:449; META g-7 13_UI_Parches.html:28 | ✅ |
+| 2 | SCI = especialidad INTERNA con 5 niveles agrupados | 00_Constantes.js:475 + META e-7 (13_UI_Parches.html:40), ambos `INTERNO` y los 5 niveles | ✅ |
+| 3 | Radioaficionado = subesp. de Telecomunicaciones INTERNO, 4 niveles | 00_Constantes.js:487 + META s-1 (13_UI_Parches.html:41), 4 niveles ambos (alineado V3.4M) | ✅ |
+| 4 | Operador RPAS = especialidad única; modelos = campo de credencial | 00_Constantes.js:472 (INTERNO); `VolCredenciales.modelosHabilitados` col 10 (00_Constantes.js:326); SUBESPECIALIDADES_V2 sin modelos RPAS | ✅ |
+| 5 | Admin. Logística → 3 especialidades OFICIAL; original inactiva | 00_Constantes.js:471 (`activo=false`, conservada) + 476-478 (las 3, OFICIAL/Activo) | ✅ |
+| 6 | Sanidad → 'Auxiliar de Sanidad' | 00_Constantes.js:469 (nombre nuevo; área 'Sanidad' conservada; migración V3.4D/F por ID) | ✅ |
+| 7 | Credenciales plantilla-only | `listarCredencialesV2` devuelve solo {id,nombre,emisor,estado} (25_Credenciales.js:36-52); ESTADOS_TIPO_CREDENCIAL 2 valores | ✅ |
+| 8 | Personas eliminada; 22_Personas.js conservado | 21_UI_Personas.html no existe (commit 7efb975); 22_Personas.js intacto con 15 funciones | ⚠️ (ver abajo) |
+
+**INCONSISTENCIA DETECTADA — REQUIERE DECISIÓN DEL USUARIO (no corregida en esta fase, por regla):** la decisión 8 se enunció como "22_Personas.js se conserva porque lo consumen **6+ archivos**". El conteo real en el código actual es **5 archivos**: 14_UI_Dashboard (1 llamada), 15_UI_Voluntarios (8), 17_UI_Entregas (2), 18_UI_Ficha (6), 19_UI_Modulos (1) — el "6+" del historial (V3.4I) incluía 21_UI_Personas.html, que fue **eliminado en V3.4K**. La decisión de fondo (conservar 22_Personas.js) es correcta y se mantiene; solo el argumento del conteo quedó obsoleto. Se documentó en AGENTS.md con la nota ⚠️; si el usuario prefiere, puede aprobar corregir el enunciado a "5 páginas frontend".
+
 ## Otros entregables
 
 - **Commits separados (5):** (1) fix CSS popover `67c20dd` · (1b) toggle mini + versión `9dd4f83` · (2) lazy loading `529ae92` · (3) Biblioteca colapsable `9a086eb` · (0.1) baseline tests `8a22dd9`.
 - **Verificación técnica:** harness 70/70 OK · `node --check` 47/47 archivos del proyecto (el único "fallo" es la página de referencia descargada de defensacivil.cl, excluida de clasp) · braces CSS balanceadas · regresión de invariantes V3.4M (`.skeleton` 14px, `.cargando` 200px, Radioaficionado 4 niveles) y V3.4K (memo catalogo/inventario, historial paginado, `obtenerHistorial` con LOTE/offset) sin fallos.
 - **Deployment:** `clasp push` + `clasp deploy -i AKfycbxVlTwraU3tClaeLakRkXW3fwmi99-9ZqRtqgvwwEOhQqha9kSTnLxyjRpqZofh6DoO` → **@34** (misma URL).
-- **AGENTS.md** actualizado (§0 @34/0.8.9, §9.3, §12).
+- **AGENTS.md** actualizado (§0 @34/0.8.9, §9.3, §12) + **nueva sección `## DECISIONES PERMANENTES — NO MODIFICAR SIN APROBACIÓN EXPLÍCITA`** al inicio (regla de vigencia + 8 decisiones de modelo de datos verificadas contra código real — ver sección f).
 
 ## Pendiente del usuario (verificación visual en /dev, Ctrl+Shift+R)
 
