@@ -12,7 +12,7 @@ var App = (function () {
   var sesion = null;
   var PAGINAS = {};
   var cache = {};
-  var PROYECTO_VERSION = '0.8.5';
+  var PROYECTO_VERSION = '0.8.6';
   var ultimoTotalAlertas = null;
   var _barraCarga = null;
 
@@ -530,7 +530,8 @@ var App = (function () {
   }
 
   function trasCambio() {
-    invalidar('dashboard');
+    // V3.4K (0.1): invalida TODA la caché (dashboard + catálogos + config…)
+    for (var k in cache) { delete cache[k]; }
     refrescarAlertas();
   }
 
@@ -584,6 +585,21 @@ var App = (function () {
         });
       })(grupos[gi]);
     }
+    var btnMini = document.getElementById('btn-sidebar-mini');
+    if (btnMini && sidebar) {
+      var aplicarMini = function (mini) {
+        sidebar.classList.toggle('mini', mini);
+        document.body.classList.toggle('dc-mini', mini);
+        btnMini.setAttribute('aria-expanded', mini ? 'true' : 'false');
+        try { localStorage.setItem('dc-sidebar-mini', mini ? '1' : '0'); } catch (err) {}
+      };
+      btnMini.addEventListener('click', function () {
+        aplicarMini(!sidebar.classList.contains('mini'));
+      });
+      var miniInicial = false;
+      try { miniInicial = localStorage.getItem('dc-sidebar-mini') === '1'; } catch (err) {}
+      aplicarMini(miniInicial);
+    }
     if (btnMenu && sidebar) {
       btnMenu.addEventListener('click', function () {
         var abierta = sidebar.classList.toggle('abierta');
@@ -635,6 +651,37 @@ var App = (function () {
           if (verTodas) {
             verTodas.addEventListener('click', function () { navegar('dashboard'); });
           }
+        });
+      });
+    }
+
+    var accesos = document.querySelectorAll('.acceso-rapido');
+    for (var ai = 0; ai < accesos.length; ai++) {
+      (function (btn) {
+        btn.addEventListener('click', function () { navegar(btn.getAttribute('data-rapido')); });
+      })(accesos[ai]);
+    }
+    var btnMas = document.getElementById('btn-mas');
+    if (btnMas) {
+      // V3.4K (6): móvil — ⋮ con navegación agrupada (las mismas rutas del sidebar).
+      var rutasMas = [
+        ['dashboard', 'Panel de control', 'dashboard'],
+        ['voluntarios', 'Voluntarios', 'voluntarios'],
+        ['servicios', 'Servicios', 'servicios'],
+        ['asistencia', 'Asistencia', 'asistencia'],
+        ['inventario', 'Inventario', 'inventario'],
+        ['entregas', 'Entregas', 'entregas'],
+        ['catalogo', 'Catálogo', 'catalogo'],
+        ['historial', 'Historial', 'historial'],
+        ['configuracion', 'Configuración', 'configuracion']
+      ];
+      btnMas.addEventListener('click', function () {
+        var items = rutasMas.map(function (r) {
+          return '<div class="menu-item" data-rapido="' + r[0] + '">' + icono(r[2]) + '<span>' + h(r[1]) + '</span></div>';
+        }).join('');
+        dropdown(btnMas, '<div class="menu-desplegable">' + items + '</div>');
+        btnMas.parentNode.querySelectorAll('.menu-item[data-rapido]').forEach(function (el) {
+          el.addEventListener('click', function () { navegar(el.getAttribute('data-rapido')); });
         });
       });
     }
