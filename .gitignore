@@ -26,3 +26,7 @@ node_modules/
 # Temporary
 /tmp/
 *.tmp
+
+# Reference material (scraped official site — not part of the project, see AGENTS.md)
+/Defensa Civil – Al servicio de la ciudadaní.html
+/Defensa Civil – Al servicio de la ciudadaní_files/
