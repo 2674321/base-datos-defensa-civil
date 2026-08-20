@@ -433,45 +433,86 @@ var AsistenciaModule = (function () {
 
 var HistorialModule = (function () {
   'use strict';
+  // V3.4K (1): historial colapsable por año/mes/semana con carga perezosa.
   var cont = null;
   var items = [];
+  var offset = 0;
+  var fin = false;
+  var cargando = false;
+  var LOTE = 80;
   var filtroTipo = '';
   var filtroResultado = '';
   var consulta = '';
+  var MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
-  return {
-    init: function (contenedor) {
-      cont = contenedor;
-      App.skeleton(cont, 5);
-      App.pedir('obtenerHistorial', [200]).then(function (res) {
-        items = res || [];
-        render();
-      }).catch(function (err) {
-        cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el historial.</strong> ' + App.h(err.message || err));
-      });
-    },
-    render: render
-  };
+  function parseFecha(texto) {
+    var p = String(texto || '').split('/');
+    if (p.length !== 3) return null;
+    var d = new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function claveLunes(fechaTexto) {
+    var d = parseFecha(fechaTexto);
+    if (!d) return null;
+    var lunes = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+    return { lunes: lunes, clave: lunes.getFullYear() + '-' + lunes.getMonth() + '-' + lunes.getDate() };
+  }
+
+  function aplicarFiltros() {
+    var q = consulta.trim().toLowerCase();
+    return items.filter(function (x) {
+      if (filtroTipo && x.tipo !== filtroTipo) return false;
+      if (filtroResultado === 'ok' && x.ok === false) return false;
+      if (filtroResultado === 'error' && x.ok !== false) return false;
+      if (!q) return true;
+      return String(x.titulo + ' ' + (x.detalle || '') + ' ' + x.tipo).toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  function cargarLote() {
+    if (cargando || fin) return Promise.resolve(false);
+    cargando = true;
+    return App.pedir('obtenerHistorial', [LOTE, offset]).then(function (res) {
+      var filas = res || [];
+      items = items.concat(filas);
+      offset += filas.length;
+      if (filas.length < LOTE) fin = true;
+      return true;
+    }).catch(function () {
+      App.toast('No se pudo cargar más historial', 'error');
+      return false;
+    }).then(function (ok) {
+      cargando = false;
+      return ok;
+    });
+  }
+
+  function tiposDisponibles() {
+    var t = {};
+    items.forEach(function (x) { if (x.tipo) t[x.tipo] = true; });
+    return Object.keys(t).sort();
+  }
 
   function render() {
-    cont.innerHTML = '';
-    var tipos = {};
-    items.forEach(function (x) { if (x.tipo) tipos[x.tipo] = true; });
-    var optTipos = Object.keys(tipos).sort().map(function (t) {
+    var tipos = tiposDisponibles();
+    var optTipos = tipos.map(function (t) {
       return '<option value="' + App.h(t) + '">' + App.h(t) + '</option>';
     }).join('');
 
+    cont.innerHTML = '';
     var cabecera = document.createElement('div');
     cabecera.className = 'page-cabecera';
     cabecera.innerHTML =
       '<div><h1 class="page-titulo">Historial</h1>' +
-      '<p class="page-sub">Registro cronológico de las operaciones del sistema (' + items.length + ' eventos)</p></div>';
+      '<p class="page-sub">Registro cronológico de las operaciones del sistema (' + items.length + ' evento(s) cargados' + (fin ? '' : ' · carga perezosa por bloques') + ')</p></div>';
     cont.appendChild(cabecera);
 
     var card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-cabecera">' +
+      '<div class="card-cabecera" style="flex-wrap:wrap">' +
       '<div class="buscador" style="flex:1;min-width:180px;max-width:300px">' + App.icono('buscar') +
       '<input class="input" id="hist-buscar" placeholder="Buscar en el historial…" aria-label="Buscar en historial"></div>' +
       '<select class="select" id="hist-filtro-tipo" style="width:auto" aria-label="Filtrar por tipo">' +
@@ -482,9 +523,10 @@ var HistorialModule = (function () {
       '<div class="card-cuerpo" id="hist-cuerpo"></div>';
     cont.appendChild(card);
 
-    document.getElementById('hist-buscar').addEventListener('input', App.debounce(function () {
+    var input = document.getElementById('hist-buscar');
+    input.addEventListener('input', App.debounce(function () {
       consulta = this.value;
-      pintar();
+      autoExpandir();
     }, 250));
     document.getElementById('hist-filtro-tipo').addEventListener('change', function () {
       filtroTipo = this.value;
@@ -498,33 +540,148 @@ var HistorialModule = (function () {
     pintar();
   }
 
-  function pintar() {
+  function autoExpandir() {
+    var que = consulta.trim().toLowerCase();
+    if (!que) { pintar(); return; }
+    // Si no hay coincidencias en lo cargado y hay más por cargar, sigue cargando
+    // (máx. 5 bloques) hasta encontrar o agotar.
+    var cargarMas = function (intentos) {
+      var hay = aplicarFiltros().length > 0;
+      if (hay || fin || intentos >= 5) { pintar(true); return; }
+      cargarLote().then(function (ok) {
+        if (!ok) { pintar(true); return; }
+        cargarMas(intentos + 1);
+      });
+    };
+    cargarMas(0);
+  }
+
+  function pintar(expandirCoincidencias) {
     var cuerpo = document.getElementById('hist-cuerpo');
     if (!cuerpo) return;
-    var q = consulta.trim().toLowerCase();
-    var filtrados = items.filter(function (x) {
-      if (filtroTipo && x.tipo !== filtroTipo) return false;
-      if (filtroResultado === 'ok' && x.ok === false) return false;
-      if (filtroResultado === 'error' && x.ok !== false) return false;
-      if (!q) return true;
-      return String(x.titulo + ' ' + (x.detalle || '')).toLowerCase().indexOf(q) !== -1;
-    });
+    var filtrados = aplicarFiltros();
     if (!filtrados.length) {
       cuerpo.innerHTML = App.empty('historial', 'Sin eventos', 'No hay eventos que coincidan con los filtros aplicados.');
+      if (!fin && items.length) cuerpo.insertAdjacentHTML('beforeend', botonMas());
+      vincularBotones();
       return;
     }
-    var html = '<div class="timeline">';
-    for (var i = 0; i < filtrados.length; i++) {
-      var x = filtrados[i];
-      html += '<div class="tl-item ' + (x.ok === false ? 'error' : 'ok') + '">' +
-        '<div class="tl-fecha">' + App.h(x.fecha) + (x.hora ? ' · ' + App.h(x.hora) : '') + ' · ' + App.h(x.tipo) + '</div>' +
-        '<div class="tl-titulo">' + App.h(x.titulo) + '</div>' +
-        (x.detalle ? '<div class="tl-detalle">' + App.h(x.detalle) + '</div>' : '') +
-        '</div>';
-    }
-    html += '</div>';
+
+    // Agrupar por año → mes → semana (lunes)
+    var anios = {};
+    filtrados.forEach(function (x) {
+      var c = claveLunes(x.fecha);
+      if (!c) { c = { clave: 'x-0-0', lunes: null }; }
+      if (!anios[c.clave.split('-')[0]]) anios[c.clave.split('-')[0]] = {};
+      var anio = c.clave.split('-')[0];
+      var mes = c.clave.split('-')[0] + '-' + c.clave.split('-')[1];
+      if (!anios[anio][mes]) anios[anio][mes] = {};
+      if (!anios[anio][mes][c.clave]) anios[anio][mes][c.clave] = { lunes: c.lunes, items: [] };
+      anios[anio][mes][c.clave].items.push(x);
+    });
+    var clavesAnio = Object.keys(anios).sort().reverse();
+
+    var html = '';
+    clavesAnio.forEach(function (anio, ia) {
+      var meses = anios[anio];
+      var clavesMes = Object.keys(meses).sort().reverse();
+      var totalAnio = 0;
+      clavesMes.forEach(function (m) { for (var w in meses[m]) totalAnio += meses[m][w].items.length; });
+      var abiertoAnio = expandirCoincidencias || (ia === 0 && !consulta.trim());
+      html += '<div class="hist-grupo" data-anio="' + anio + '">' +
+        '<button class="hist-cabecera" aria-expanded="' + (abiertoAnio ? 'true' : 'false') + '">' +
+        '<span class="hist-chevron">' + App.icono('chevronD') + '</span>' +
+        '<strong class="hist-titulo">' + anio + '</strong>' +
+        '<span class="hist-count">' + totalAnio + ' evento(s)</span></button>' +
+        '<div class="hist-contenido"' + (abiertoAnio ? '' : ' hidden') + '>';
+      clavesMes.forEach(function (m, im) {
+        var partes = m.split('-');
+        var numMes = Number(partes[1]);
+        var semanas = meses[m];
+        var clavesSem = Object.keys(semanas).sort().reverse();
+        var totalMes = 0;
+        clavesSem.forEach(function (w) { totalMes += semanas[w].items.length; });
+        var abiertoMes = abiertoAnio && (expandirCoincidencias || (ia === 0 && im === 0 && !consulta.trim()));
+        html += '<div class="hist-grupo hist-mes">' +
+          '<button class="hist-cabecera" aria-expanded="' + (abiertoMes ? 'true' : 'false') + '">' +
+          '<span class="hist-chevron">' + App.icono('chevronD') + '</span>' +
+          '<span class="hist-titulo">' + MESES[numMes] + ' ' + partes[0] + '</span>' +
+          '<span class="hist-count">' + totalMes + '</span></button>' +
+          '<div class="hist-contenido"' + (abiertoMes ? '' : ' hidden') + '>';
+        clavesSem.forEach(function (w, is) {
+          var sem = semanas[w];
+          var abiertaSem = abiertoMes && (expandirCoincidencias || (ia === 0 && im === 0 && is === 0 && !consulta.trim()));
+          var etiqueta = sem.lunes
+            ? 'Semana del ' + ('0' + sem.lunes.getDate()).slice(-2) + ' ' + MESES_CORTOS[sem.lunes.getMonth()] + ' ' + sem.lunes.getFullYear()
+            : 'Sin fecha';
+          html += '<div class="hist-grupo hist-semana">' +
+            '<button class="hist-cabecera" aria-expanded="' + (abiertaSem ? 'true' : 'false') + '">' +
+            '<span class="hist-chevron">' + App.icono('chevronD') + '</span>' +
+            '<span class="hist-titulo">' + etiqueta + '</span>' +
+            '<span class="hist-count">' + sem.items.length + '</span></button>' +
+            '<div class="hist-contenido"' + (abiertaSem ? '' : ' hidden') + '>' +
+            '<div class="timeline">' + sem.items.map(function (x) {
+              return '<div class="tl-item ' + (x.ok === false ? 'error' : 'ok') + '">' +
+                '<div class="tl-fecha">' + App.h(x.fecha) + (x.hora ? ' · ' + App.h(x.hora) : '') + ' · ' + App.h(x.tipo) + '</div>' +
+                '<div class="tl-titulo">' + App.h(x.titulo) + '</div>' +
+                (x.detalle ? '<div class="tl-detalle">' + App.h(x.detalle) + '</div>' : '') +
+                '</div>';
+            }).join('') + '</div></div></div>';
+        });
+        html += '</div></div>';
+      });
+      html += '</div></div>';
+    });
+
     cuerpo.innerHTML = html;
+    if (!fin) cuerpo.insertAdjacentHTML('beforeend', botonMas());
+    vincularBotones();
   }
+
+  function botonMas() {
+    return '<button class="btn btn-secundario" id="hist-mas" style="margin-top:var(--esp-3);width:100%">' +
+      App.icono('historial') + 'Cargar más historial</button>';
+  }
+
+  function vincularBotones() {
+    var mas = document.getElementById('hist-mas');
+    if (mas) {
+      mas.addEventListener('click', function () {
+        App.botonEstado(mas, 'procesando', 'Cargando…');
+        cargarLote().then(function (ok) {
+          App.botonEstado(mas, 'normal');
+          pintar();
+          // V3.4K (1): al expandir el grupo más antiguo se carga el bloque
+          // siguiente automáticamente (lazy load).
+        });
+      });
+    }
+    cont.querySelectorAll('.hist-cabecera').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var grupo = btn.parentNode;
+        var contenido = grupo.querySelector(':scope > .hist-contenido');
+        var abierto = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!abierto));
+        if (contenido) contenido.hidden = abierto;
+        // Lazy load: expandir el último grupo cargado (más antiguo) → siguiente bloque
+        if (!abierto) {
+          var ultimoGrupo = cont.querySelector('.hist-grupo:last-of-type');
+          if (ultimoGrupo && ultimoGrupo === grupo && !fin) {
+            cargarLote().then(function () { pintar(); });
+          }
+        }
+      });
+    });
+  }
+
+  return {
+    init: function (contenedor) {
+      cont = contenedor;
+      App.skeleton(cont, 5);
+      cargarLote().then(function () { render(); });
+    },
+    render: render
+  };
 })();
 
 var ConfigModule = (function () {
