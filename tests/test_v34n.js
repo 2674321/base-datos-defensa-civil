@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const V1 = '/home/a2cl/Documentos/07_Proyectos/Base_Datos/v1';
+const V1 = path.resolve(__dirname, '..');
 let OK = 0, FALLOS = 0;
 function check(nombre, cond, detalle) {
   if (cond) { OK++; console.log('  OK  ' + nombre); }
