@@ -10,7 +10,11 @@
    requisitos (solo los conocidos) y relaciones.
    V3.4F: Jefe de Sede = DISTINTIVO (cargo/condición de mando, NO grado);
    se ordena entre Instructor Mayor y Comandante Local; SCI (RECONOCIDA) se
-   agrega a Especialidades y Parches. */
+   agrega a Especialidades y Parches.
+   V3.4N: secciones COLAPSABLES (mismo acordeón `.hist-grupo` que el Historial
+   V3.4K) — todas inician colapsadas con contador, el contenido se renderiza
+   solo en la primera expansión, y la búsqueda auto-expande las secciones con
+   coincidencias (ocultando las que no). */
 
 var BibliotecaModule = (function () {
   'use strict';
@@ -143,13 +147,41 @@ var BibliotecaModule = (function () {
     rejilla.appendChild(card);
   }
 
+  function renderContenidoSeccion(sec, elementos, items, cont) {
+    cont.innerHTML = '';
+    if (sec.elementos) {
+      var rejillaE = document.createElement('div');
+      rejillaE.className = 'rejilla-2';
+      rejillaE.style.padding = 'var(--esp-2) var(--esp-1) 0 0';
+      elementos.forEach(function (nom) { tarjetaElemento(sec, nom, rejillaE); });
+      cont.appendChild(rejillaE);
+    } else {
+      cont.innerHTML = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
+        '<th>Documento</th><th>Descripción</th><th>Estado</th>' +
+        '</tr></thead><tbody>' +
+        (items.length
+          ? items.map(function (it) {
+              return '<tr>' +
+                '<td class="fuerte">' + App.icono('documento') + ' ' + App.h(it.titulo) + '</td>' +
+                '<td class="texto-dim">' + App.h(it.detalle) + '</td>' +
+                '<td>' + estadoItem(it) + '</td>' +
+                '</tr>';
+            }).join('')
+          : '<tr><td colspan="3" class="texto-dim">Sin documentos para la búsqueda en esta sección.</td></tr>') +
+        '</tbody></table></div>';
+    }
+    cont.dataset.renderizado = '1';
+  }
+
   function pintarSecciones(rejilla) {
+    // V3.4N: re-render limpio — sin esto, buscar acumulaba secciones duplicadas.
+    rejilla.innerHTML = '';
+    var coincide = function (texto) {
+      if (!consulta) return true;
+      return String(texto || '').toLowerCase().indexOf(consulta) >= 0;
+    };
     var hayResultados = false;
     SECCIONES.forEach(function (sec) {
-      var coincide = function (texto) {
-        if (!consulta) return true;
-        return String(texto || '').toLowerCase().indexOf(consulta) >= 0;
-      };
       var elementos = (sec.elementos || []).filter(function (nom) {
         var m = App.meta(nom) || {};
         return coincide(nom + ' ' + sec.nombre + ' ' + sec.descripcion + ' ' + (m.especialidad || '') + ' ' + (m.subespecialidad || '') + ' ' + (m.unidad || '') + ' ' + (m.descripcion || ''));
@@ -157,38 +189,36 @@ var BibliotecaModule = (function () {
       var items = (sec.items || []).filter(function (it) {
         return coincide(it.titulo + ' ' + it.detalle + ' ' + sec.nombre);
       });
-      if (!elementos.length && !items.length) return;
+      // V3.4N: con búsqueda activa, las secciones sin coincidencias se ocultan.
+      if (consulta && !elementos.length && !items.length) return;
       hayResultados = true;
 
-      var card = document.createElement('div');
-      card.className = 'card';
-      var cabecera = '<div class="card-cabecera"><strong>' + App.icono(sec.icono) + ' ' + App.h(sec.nombre) + '</strong>' +
-        '<span class="texto-dim" style="font-weight:400;font-size:.8rem">' + App.h(sec.descripcion) + '</span></div>';
+      var total = (sec.elementos || []).length + (sec.items || []).length;
+      // V3.4N: colapsada por defecto; la búsqueda auto-expande las coincidencias.
+      var abierto = !!consulta;
 
-      if (sec.elementos) {
-        card.innerHTML = cabecera;
-        var rejillaE = document.createElement('div');
-        rejillaE.className = 'rejilla-2';
-        rejillaE.style.padding = 'var(--esp-3)';
-        elementos.forEach(function (nom) { tarjetaElemento(sec, nom, rejillaE); });
-        card.appendChild(rejillaE);
-      } else {
-        card.innerHTML = cabecera +
-          '<div class="card-cuerpo sin-pad"><div class="tabla-wrap"><table class="tabla"><thead><tr>' +
-          '<th>Documento</th><th>Descripción</th><th>Estado</th>' +
-          '</tr></thead><tbody>' +
-          (items.length
-            ? items.map(function (it) {
-                return '<tr>' +
-                  '<td class="fuerte">' + App.icono('documento') + ' ' + App.h(it.titulo) + '</td>' +
-                  '<td class="texto-dim">' + App.h(it.detalle) + '</td>' +
-                  '<td>' + estadoItem(it) + '</td>' +
-                  '</tr>';
-              }).join('')
-            : '<tr><td colspan="3" class="texto-dim">Sin documentos para la búsqueda en esta sección.</td></tr>') +
-          '</tbody></table></div></div>';
-      }
-      rejilla.appendChild(card);
+      var grupo = document.createElement('div');
+      grupo.className = 'hist-grupo';
+      grupo.innerHTML =
+        '<button class="hist-cabecera" aria-expanded="' + (abierto ? 'true' : 'false') + '">' +
+        '<span class="hist-chevron">' + App.icono('chevronD') + '</span>' +
+        '<span class="hist-titulo">' + App.icono(sec.icono) + ' ' + App.h(sec.nombre) +
+        '<span class="texto-dim" style="display:block;font-size:var(--t-caption);font-weight:400">' + App.h(sec.descripcion) + '</span></span>' +
+        '<span class="hist-count">' + total + ' ' + (sec.elementos ? 'elemento(s)' : 'documento(s)') + '</span></button>' +
+        '<div class="hist-contenido"' + (abierto ? '' : ' hidden') + '></div>';
+      rejilla.appendChild(grupo);
+
+      var contenido = grupo.querySelector(':scope > .hist-contenido');
+      if (abierto) renderContenidoSeccion(sec, elementos, items, contenido);
+      grupo.querySelector('.hist-cabecera').addEventListener('click', function () {
+        var btn = grupo.querySelector('.hist-cabecera');
+        var estabaAbierto = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!estabaAbierto));
+        if (estabaAbierto) { contenido.hidden = true; return; }
+        contenido.hidden = false;
+        // Render perezoso: el contenido se dibuja solo en la primera expansión.
+        if (!contenido.dataset.renderizado) renderContenidoSeccion(sec, elementos, items, contenido);
+      });
     });
     if (!hayResultados) {
       rejilla.innerHTML = '<div class="card"><div class="card-cuerpo">' +
