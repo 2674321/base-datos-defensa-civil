@@ -23,10 +23,9 @@ var BibliotecaModule = (function () {
       icono: 'usuario',
       tipo: 'GRADO',
       descripcion: 'Grados jerárquicos de la sede y distintivos institucionales.',
-      // V3.4F: jerarquía visual — Jefe de Sede (distintivo/cargo de mando)
-      // entre Instructor Mayor y Comandante Local; NO es grado.
-      // V3.4G: se eliminó 'Radioaficionado CA2OPX' — el indicativo es dato
-      // personal de la credencial, no del catálogo institucional.
+      // V3.4K (0.2): Jefe de Sede es GRADO real (g-7, OFICIAL) en la META —
+      // ya no es DISTINTIVO origen CARGO; la jerarquía visual lo ubica entre
+      // Comandante Local e Instructor Mayor (coincide con GRADOS_V2 orden 2).
       elementos: ['Comandante Local', 'Jefe de Sede', 'Instructor Mayor', 'Instructor', 'Sub Instructor', 'Voluntario Mayor', 'Voluntario']
     },
     {
@@ -77,9 +76,8 @@ var BibliotecaModule = (function () {
   ];
 
   var TIPOS_LABEL = { GRADO: 'Grado', ESPECIALIDAD: 'Especialidad', SUBESPECIALIDAD: 'Subespecialidad', UNIDAD: 'Unidad', DISTINTIVO: 'Distintivo' };
-  // V3.4F: RECONOCIDA (SCI) se mostraba como info — V3.4H: SCI pasó a INTERNA
-  // (ya no hay elementos RECONOCIDA en el catálogo); CARGO (Jefe de Sede) no es
-  // un "origen" — se presenta como Condición en la ficha y badge en la tarjeta.
+  // V3.4K (0.2): ningún elemento META es origen CARGO (Jefe de Sede pasó a
+  // GRADO g-7); el caso CARGO_CONDICION se conserva como compatibilidad muerta.
   var ORIGEN_CLASE = { OFICIAL: 'ok', INTERNO: 'info', EXTERNO: 'aviso' };
   var CARGO_CONDICION = 'Cargo/condición de mando';
 

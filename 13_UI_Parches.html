@@ -16,14 +16,16 @@
   App.PARCHES = DATA;
   // V3.4F: metadata por entidad (tipos GRADO/ESPECIALIDAD/SUBESPECIALIDAD/
   // UNIDAD/DISTINTIVO). 'archivo' = clave de imagen en DATA ('' → placeholder).
-  // Jefe de Sede NO es grado (GRADOS_V2 = 6): es CARGO/condición de mando con
-  // distintivo propio (3 barras) — se modela como DISTINTIVO origen CARGO.
-  // V3.4G: META tiene 19 entradas (se eliminó el distintivo 'd-1 Radioaficionado
+  // V3.4K (0.2): Jefe de Sede ES GRADO real (GRADOS_V2 = 7, orden 2, UNI 2018
+  // '3 barras') — se modela como GRADO g-7 y coexiste con el CARGO 'Jefe de
+  // Sede / Jefe Local' (CARGOS_V2, misma condición de mando).
+  // V3.4G: META tiene 20 entradas (se eliminó el distintivo 'd-1 Radioaficionado
   // CA2OPX': el indicativo es dato PERSONAL de la credencial, no del catálogo
   // institucional). Campo 13 'niveles' (lista ';') para SCI y Radioaficionado.
   var META_CAMPOS = ['tipo', 'entidadId', 'nombre', 'area', 'especialidad', 'subespecialidad', 'unidad', 'grado', 'origen', 'descripcion', 'archivo', 'activo', 'niveles'];
   var META = [
     ['GRADO', 'g-1', 'Comandante Local', 'Mando', '', '', '', 'Comandante Local', 'OFICIAL', 'Grado jerárquico superior de la sede.', 'grado comandante local', true],
+    ['GRADO', 'g-7', 'Jefe de Sede', 'Mando', '', '', '', 'Jefe de Sede', 'OFICIAL', 'Grado real de la sede (UNI 2018: 3 barras). Coexiste con el cargo de Jefe de Sede / Jefe Local.', 'parche jefe sede', true],
     ['GRADO', 'g-2', 'Instructor', 'Mando', '', '', '', 'Instructor', 'OFICIAL', 'Grado de instructor de la sede.', 'grado instructor', true],
     ['GRADO', 'g-3', 'Sub Instructor', 'Mando', '', '', '', 'Sub Instructor', 'OFICIAL', 'Grado de sub instructor de la sede.', 'grado sub instructor', true],
     ['GRADO', 'g-4', 'Voluntario Mayor', 'Mando', '', '', '', 'Voluntario Mayor', 'OFICIAL', 'Grado superior al de voluntario.', 'grado voluntario mayor', true],
@@ -40,8 +42,7 @@
     ['SUBESPECIALIDAD', 's-2', 'Stop The Bleed', 'Sanidad', 'Auxiliar de Sanidad', 'Stop The Bleed', '', '', 'INTERNO', 'Técnica de control de hemorragias.', '', true],
     ['UNIDAD', 'u-1', 'Fuerza de Tarea Delta', '', '', '', 'Fuerza de Tarea Delta', '', 'INTERNO', 'Unidad operativa interna de la sede.', 'fuerza de tarea delta', true],
     ['UNIDAD', 'u-2', 'Operadores RPA', '', '', '', 'Operadores RPA', '', 'INTERNO', 'Unidad interna de operadores de aeronaves remotamente pilotadas.', '', true],
-    ['UNIDAD', 'u-3', 'Grupo de Rescate Animal', '', '', '', 'Grupo de Rescate Animal', '', 'INTERNO', 'Unidad en formación.', '', true],
-    ['DISTINTIVO', 'd-2', 'Jefe de Sede', 'Mando', '', '', '', 'Instructor Mayor', 'CARGO', 'Cargo/condición de mando de la sede: requiere grado Instructor Mayor (UNI 2018: 3 barras). Coexiste con el grado.', 'parche jefe sede', true]
+    ['UNIDAD', 'u-3', 'Grupo de Rescate Animal', '', '', '', 'Grupo de Rescate Animal', '', 'INTERNO', 'Unidad en formación.', '', true]
   ];
   App.meta = function (nombre) {
     var n = String(nombre || '').trim().toLowerCase().replace(/\s+/g, ' ');
