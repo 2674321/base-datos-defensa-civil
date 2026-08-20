@@ -226,7 +226,9 @@ var FichaModule = (function () {
       itemAnios('Antigüedad en cargo', a.enCargoAnios) +
       '</div>';
 
-    return App.pedir('listarRetirosTemporalesV2', [m.id]).then(function (retiros) {
+    return App.memo('retiros:' + m.id, 30000, function () {
+      return App.pedir('listarRetirosTemporalesV2', [m.id]);
+    }).then(function (retiros) {
       var filasR = (retiros || []).map(function (r) {
         return '<tr><td>' + App.h(r.estado) + '</td><td class="num">' + App.h(r.fechaInicio || '—') + '</td>' +
           '<td class="num">' + App.h(r.fechaTermino || '—') + '</td><td>' + App.h(r.motivo || '—') + '</td></tr>';
@@ -235,10 +237,12 @@ var FichaModule = (function () {
         tabla(['Estado', 'Desde', 'Hasta', 'Motivo'], filasR || '', 'historial', 'Sin retiros temporales', 'No hay retiros temporales registrados para este voluntario.');
       return html;
     }).then(function (htmlCompleto) {
-      return App.pedir('listarUnidadesV2').then(function (unidades) {
+      return App.memo('unidades', 30000, function () { return App.pedir('listarUnidadesV2'); }).then(function (unidades) {
         var unidades2 = unidades || [];
         var promesas = unidades2.map(function (u) {
-          return App.pedir('listarIntegrantesUnidadV2', [u.id]).then(function (int) {
+          return App.memo('unidades:' + u.id, 30000, function () {
+            return App.pedir('listarIntegrantesUnidadV2', [u.id]);
+          }).then(function (int) {
             var fila = (int || []).find(function (i) { return String(i.voluntarioId) === String(m.id); });
             return fila ? { unidad: u.nombre, rol: fila.rol, desde: fila.fechaIngreso, activo: fila.activo } : null;
           });
@@ -266,9 +270,9 @@ var FichaModule = (function () {
 
   function renderCapacidades() {
     return Promise.all([
-      App.pedir('listarEspecialidadesVoluntarioV2', [m.id]),
-      App.pedir('listarCredencialesVoluntarioV2', [m.id]),
-      App.pedir('listarCapacitacionesVoluntarioV2', [m.id])
+      App.memo('especialidades-vol:' + m.id, 30000, function () { return App.pedir('listarEspecialidadesVoluntarioV2', [m.id]); }),
+      App.memo('credenciales-vol:' + m.id, 30000, function () { return App.pedir('listarCredencialesVoluntarioV2', [m.id]); }),
+      App.memo('capacitaciones-vol:' + m.id, 30000, function () { return App.pedir('listarCapacitacionesVoluntarioV2', [m.id]); })
     ]).then(function (r) {
       var esp = r[0] || [];
       var cred = r[1] || [];
@@ -347,7 +351,9 @@ var FichaModule = (function () {
   }
 
   function renderEquipamiento() {
-    return App.pedir('obtenerEquipamientoVoluntarioV2', [m.id]).then(function (lista) {
+    return App.memo('equipamiento-vol:' + m.id, 30000, function () {
+      return App.pedir('obtenerEquipamientoVoluntarioV2', [m.id]);
+    }).then(function (lista) {
       var l = lista || [];
       if (!l.length) {
         return App.empty('paquete', 'Sin equipamiento asignado', 'Usa «Registrar entrega» para asignar elementos a este voluntario.');
@@ -364,10 +370,10 @@ var FichaModule = (function () {
   }
 
   function renderServicios() {
-    return App.pedir('listarServiciosV2').then(function (servicios) {
+    return App.memo('servicios', 30000, function () { return App.pedir('listarServiciosV2'); }).then(function (servicios) {
       var srv = servicios || [];
       var promesas = srv.map(function (s) {
-        return App.pedir('obtenerServicioV2', [s.id]).then(function (d) {
+        return App.memo('servicio:' + s.id, 30000, function () { return App.pedir('obtenerServicioV2', [s.id]); }).then(function (d) {
           if (!d || !d.servicio) return null;
           var todas = (d.asignados || []).concat(d.cerrados || []);
           var mio = todas.find(function (a) { return String(a.voluntarioId) === String(m.id); });
@@ -396,7 +402,9 @@ var FichaModule = (function () {
   }
 
   function renderAsistencia() {
-    return App.pedir('obtenerResumenAsistenciaVoluntarioV2', [m.id]).then(function (res) {
+    return App.memo('asistencia-vol:' + m.id, 30000, function () {
+      return App.pedir('obtenerResumenAsistenciaVoluntarioV2', [m.id]);
+    }).then(function (res) {
       var r = res || { total: 0, porTipo: {} };
       var tipos = r.porTipo || {};
       if (!r.total) {
@@ -421,9 +429,9 @@ var FichaModule = (function () {
 
   function renderHistorial() {
     return Promise.all([
-      App.pedir('obtenerHistorialGradosV2', [m.id]),
-      App.pedir('obtenerHistorialCargosV2', [m.id]),
-      App.pedir('listarEventosVoluntarioV2', [m.id])
+      App.memo('hist-grados:' + m.id, 30000, function () { return App.pedir('obtenerHistorialGradosV2', [m.id]); }),
+      App.memo('hist-cargos:' + m.id, 30000, function () { return App.pedir('obtenerHistorialCargosV2', [m.id]); }),
+      App.memo('eventos:' + m.id, 30000, function () { return App.pedir('listarEventosVoluntarioV2', [m.id]); })
     ]).then(function (r) {
       var grados = r[0] || [];
       var cargos = r[1] || [];
@@ -481,7 +489,7 @@ var FichaModule = (function () {
     var vigente = function () { return m.generacion === generacion; };
     cont.innerHTML = '';
     App.skeleton(cont, 3, true);
-    App.pedir('listarPersonasV2').then(function (personas) {
+    App.memo('personas', 30000, function () { return App.pedir('listarPersonasV2'); }).then(function (personas) {
       if (!vigente()) return null;
       var persona = (personas || []).find(function (p) { return String(p.voluntarioId) === String(m.id); });
       if (!persona) throw new Error('Voluntario N° ' + m.id + ' no existe (V2)');

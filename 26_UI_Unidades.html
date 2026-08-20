@@ -8,7 +8,7 @@ var UnidadesModule = (function () {
   var lista = [];
 
   function cargar() {
-    App.pedir('listarUnidadesV2').then(function (res) {
+    App.memo('unidades', 30000, function () { return App.pedir('listarUnidadesV2'); }).then(function (res) {
       lista = res || [];
       render();
     }).catch(function (err) {
@@ -133,7 +133,9 @@ var UnidadesModule = (function () {
 
   function pintarIntegrantes(unidadId) {
     var cuerpo = document.getElementById('un-int-cuerpo');
-    App.pedir('listarIntegrantesUnidadV2', [unidadId]).then(function (res) {
+    App.memo('unidades:' + unidadId, 30000, function () {
+      return App.pedir('listarIntegrantesUnidadV2', [unidadId]);
+    }).then(function (res) {
       var items = res || [];
       if (!cuerpo) return;
       if (!items.length) { cuerpo.innerHTML = App.empty('voluntarios', 'Sin integrantes', 'Asigna el primer integrante de la unidad.'); return; }
