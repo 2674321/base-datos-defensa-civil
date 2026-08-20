@@ -196,7 +196,8 @@ var CatalogoModule = (function () {
   }
 
   function cargar() {
-    App.pedir('buscarElementos').then(function (res) {
+    // V3.4K (0.1): caché compartida (trasCambio invalida todo el caché).
+    App.memo('catalogo', 30000, function () { return App.pedir('buscarElementos'); }).then(function (res) {
       lista = res || [];
       renderLista();
     }).catch(function (err) {

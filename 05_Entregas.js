@@ -598,7 +598,9 @@ function _leerCatalogo(ss) {
   var res = [];
   for (var i = 0; i < datos.length; i++) {
     var f = datos[i];
-    if (!f[COL_CATALOGO.id - 1]) continue;
+    // V3.4K (0.1): filtra filas sin ID o sin nombre (filas fantasma E-00x de
+    // versiones antiguas que inflaban el catálogo a ~1000 ítems vacíos).
+    if (!f[COL_CATALOGO.id - 1] || !String(f[COL_CATALOGO.elemento - 1] || '').trim()) continue;
     res.push({
       fila: PRIMERA_FILA_DATO + i,
       id: String(f[COL_CATALOGO.id - 1] || ''),
