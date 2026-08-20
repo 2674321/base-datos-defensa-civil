@@ -12,7 +12,7 @@ var App = (function () {
   var sesion = null;
   var PAGINAS = {};
   var cache = {};
-  var PROYECTO_VERSION = '0.8.8';
+  var PROYECTO_VERSION = '0.8.9';
   var ultimoTotalAlertas = null;
   var _barraCarga = null;
   var _barraDesde = 0;
@@ -595,6 +595,21 @@ var App = (function () {
         btn.addEventListener('click', function () {
           var abierto = grupo.classList.toggle('abierto');
           btn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+          // V3.4N: en modo mini (popovers flotantes) solo un grupo abierto a la
+          // vez — cerrar cualquier otro `.abierto`; en sidebar completo se
+          // conserva el comportamiento de múltiples grupos abiertos.
+          if (abierto) {
+            var sb = document.getElementById('sidebar');
+            if (sb && sb.classList.contains('mini')) {
+              for (var o = 0; o < grupos.length; o++) {
+                if (grupos[o] !== grupo && grupos[o].classList.contains('abierto')) {
+                  grupos[o].classList.remove('abierto');
+                  var ob = grupos[o].querySelector('.nav-item');
+                  if (ob) ob.setAttribute('aria-expanded', 'false');
+                }
+              }
+            }
+          }
         });
       })(grupos[gi]);
     }
