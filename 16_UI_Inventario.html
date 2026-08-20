@@ -13,13 +13,17 @@ var InventarioModule = (function () {
   var abiertos = {};
 
   var ESTADOS = ['Disponible', 'Entregado', 'Dañado', 'Extraviado', 'Baja'];
-  var COLOR = { 'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B' };
+  // V3.4K (8): 'Sin estado' es robustez — si una fila no tiene estado válido
+  // se muestra explícitamente en lugar de perderse del resumen.
+  var COLOR = { 'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B', 'Sin estado': '#9AA6B2' };
 
   function agrupar() {
     var q = consulta.trim().toLowerCase();
     var grupos = {};
     for (var i = 0; i < lista.length; i++) {
       var f = lista[i];
+      // V3.4K (8): estado vacío/no válido → 'Sin estado' (normalización visual).
+      if (!f.estado) f.estado = 'Sin estado';
       if (filtroEstado && f.estado !== filtroEstado) continue;
       if (q && String(f.elemento + ' ' + f.id + ' ' + f.serie).toLowerCase().indexOf(q) === -1) continue;
       if (!grupos[f.elementoId]) {
@@ -51,7 +55,8 @@ var InventarioModule = (function () {
       '<input class="input" id="inv-buscar" placeholder="Buscar por elemento, ID o serie…" aria-label="Buscar en inventario"></div>' +
       '<select class="select" id="inv-filtro-estado" style="width:auto" aria-label="Filtrar por estado">' +
       '<option value="">Todos los estados</option>' +
-      ESTADOS.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('') + '</select>' +
+      ESTADOS.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('') +
+      '<option value="Sin estado">Sin estado</option></select>' +
       '</div>' +
       '<div class="card-cuerpo" id="inv-cuerpo"></div>';
     cont.appendChild(card);
@@ -80,14 +85,16 @@ var InventarioModule = (function () {
     }
 
     var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--esp-4)">';
+    // V3.4K (8): 'Sin estado' participa de chips, cabeceras y celdas.
+    var estadosVis = ESTADOS.concat('Sin estado');
     for (var i = 0; i < grupos.length; i++) {
       var g = grupos[i];
       var totales = {};
-      for (var s = 0; s < ESTADOS.length; s++) totales[ESTADOS[s]] = 0;
+      for (var s = 0; s < estadosVis.length; s++) totales[estadosVis[s]] = 0;
       for (var f = 0; f < g.filas.length; f++) {
         totales[g.filas[f].estado] = (totales[g.filas[f].estado] || 0) + g.filas[f].cantidad;
       }
-      var chips = ESTADOS.map(function (es) {
+      var chips = estadosVis.map(function (es) {
         if (!totales[es]) return '';
         return '<span class="chip" style="border-color:' + COLOR[es] + '66;background:var(--superficie)"><span style="width:8px;height:8px;border-radius:50%;background:' + COLOR[es] + ';display:inline-block"></span>' +
           App.h(es) + ' <span class="cant">' + totales[es] + '</span></span>';
@@ -100,7 +107,7 @@ var InventarioModule = (function () {
         tallas[talla][g.filas[t].estado] = (tallas[talla][g.filas[t].estado] || 0) + g.filas[t].cantidad;
       }
       var detalle = Object.keys(tallas).map(function (ta) {
-        var celdas = ESTADOS.map(function (es) {
+        var celdas = estadosVis.map(function (es) {
           return '<td class="num">' + (tallas[ta][es] ? tallas[ta][es] : '—') + '</td>';
         }).join('');
         return '<tr><td class="fuerte">' + App.h(ta) + '</td>' + celdas + '</tr>';
@@ -113,7 +120,7 @@ var InventarioModule = (function () {
         '<div class="card-cuerpo" style="padding-top:var(--esp-2)">' +
         '<div class="fila" style="gap:6px">' + chips + '</div>' +
         '<div id="detalle-' + App.h(g.id) + '"' + (abiertos[g.id] ? '' : ' hidden') + ' style="margin-top:var(--esp-3)">' +
-        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Talla</th><th>Disponible</th><th>Entregado</th><th>Dañado</th><th>Extraviado</th><th>Baja</th><th></th></tr></thead>' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Talla</th><th>Disponible</th><th>Entregado</th><th>Dañado</th><th>Extraviado</th><th>Baja</th><th>Sin estado</th><th></th></tr></thead>' +
         '<tbody>' + detalle + '</tbody></table></div></div>' +
         '<div class="fila" style="margin-top:var(--esp-3)">' +
         '<button class="btn btn-ghost" data-detalle="' + App.h(g.id) + '" aria-expanded="' + (abiertos[g.id] ? 'true' : 'false') + '">' +
@@ -140,7 +147,8 @@ var InventarioModule = (function () {
   }
 
   function abrirEntrada() {
-    App.pedir('buscarElementos').then(function (elementos) {
+    // V3.4K (0.1): caché compartida de catálogo (trasCambio invalida todo).
+    App.memo('catalogo', 30000, function () { return App.pedir('buscarElementos'); }).then(function (elementos) {
       var activos = elementos.filter(function (e) { return e.activo; });
       var opts = activos.map(function (e) {
         return '<option value="' + App.h(e.id) + '">' + App.h(e.elemento) + ' (' + App.h(e.id) + ')' + (e.requiereTalla ? '' : ' — sin talla') + '</option>';
@@ -230,7 +238,8 @@ var InventarioModule = (function () {
   }
 
   function cargar() {
-    App.pedir('obtenerInventario').then(function (res) {
+    // V3.4K (0.1): caché compartida de inventario (trasCambio invalida todo).
+    App.memo('inventario', 30000, function () { return App.pedir('obtenerInventario'); }).then(function (res) {
       lista = res || [];
       renderLista();
     }).catch(function (err) {

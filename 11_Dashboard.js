@@ -6,14 +6,16 @@
  * Funciones públicas: obtenerResumenDashboard, obtenerHistorial, obtenerConfiguracion.
  */
 
-/** Lee las últimas N filas del Log (batch). @return {Array} más reciente primero */
-function _leerLog(ss, limite) {
+/** Lee un tramo del Log (batch). @return {Array} más reciente primero
+ * @param {Number} offset filas a saltar desde el final (paginación) */
+function _leerLog(ss, limite, offset) {
   var sh = ss.getSheetByName(HOJA.log);
   if (!sh) return [];
   var ultima = sh.getLastRow();
-  if (ultima < 2) return [];
-  var n = Math.min(ultima - 1, limite || 50);
-  var desde = ultima - n + 1;
+  offset = Math.max(Number(offset) || 0, 0);
+  if (ultima - offset < 2) return [];
+  var n = Math.min(ultima - 1 - offset, limite || 50);
+  var desde = ultima - offset - n + 1;
   var datos = sh.getRange(desde, 1, n, 5).getValues();
   var res = [];
   for (var i = datos.length - 1; i >= 0; i--) {
@@ -181,10 +183,15 @@ function obtenerResumenDashboard() {
   }
 }
 
-/** Historial global (página Historial): últimos eventos del Log. @param {Number} limite */
-function obtenerHistorial(limite) {
+/** Historial global (página Historial): últimos eventos del Log.
+ * @param {Number} limite   máximo de eventos (1–200)
+ * @param {Number} offset   eventos a saltar desde el más reciente (paginación V3.4K)
+ */
+function obtenerHistorial(limite, offset) {
   try {
-    return _resOk(_leerLog(_ss(), Math.min(Math.max(limite || 60, 1), 200)).map(_itemActividad));
+    offset = Math.max(Number(offset) || 0, 0);
+    var n = Math.min(Math.max(limite || 60, 1), 200);
+    return _resOk(_leerLog(_ss(), n, offset).map(_itemActividad));
   } catch (err) {
     return _resErr('INTERNO', String(err));
   }
@@ -220,6 +227,77 @@ function obtenerConfiguracion() {
  * estado/categoría/grado/cargo/área, alertas reales, actividad reciente y
  * referencias de configuración. Solo lecturas batch.
  */
+/** Resumen de catálogo (v0): total y activos. */
+function _resumenCatalogo(ss) {
+  var filas = _leerCatalogo(ss);
+  var activos = 0;
+  for (var i = 0; i < filas.length; i++) if (filas[i].activo) activos++;
+  return { total: filas.length, activos: activos };
+}
+
+/** Resumen de inventario (v0) con estados normalizados (V3.4K: 'Sin estado'
+ * explícito para estados vacíos/inválidos — nunca se pierden del conteo). */
+function _resumenInventario(ss) {
+  var filas = _leerInventario(ss);
+  var MAPA = { 'Disponible': 'disponible', 'Entregado': 'entregado', 'Dañado': 'danado', 'Extraviado': 'extraviado', 'Baja': 'baja' };
+  var res = { disponible: 0, entregado: 0, danado: 0, extraviado: 0, baja: 0, sinEstado: 0, porElemento: [] };
+  var porElem = {};
+  for (var i = 0; i < filas.length; i++) {
+    var f = filas[i];
+    var est = String(f.estado || '').trim() || 'Sin estado';
+    var clave = MAPA[est] || 'sinEstado';
+    var cant = Number(f.cantidad) || 0;
+    res[clave] += cant;
+    if (!porElem[f.elementoId]) porElem[f.elementoId] = { elemento: f.elemento, porEstado: {}, total: 0 };
+    porElem[f.elementoId].porEstado[est] = (porElem[f.elementoId].porEstado[est] || 0) + cant;
+    porElem[f.elementoId].total += cant;
+  }
+  res.porElemento = Object.keys(porElem).map(function (id) {
+    return { elemento: porElem[id].elemento, total: porElem[id].total, porEstado: porElem[id].porEstado };
+  }).sort(function (a, b) { return b.total - a.total; }).slice(0, 8);
+  return res;
+}
+
+/** Resumen de entregas (v0): conteo por estado + últimos 6 meses. */
+function _resumenEntregas(filasE) {
+  var res = { total: 0, pendientes: 0, devueltas: 0, parciales: 0, danadas: 0, extraviadas: 0, entregadas: 0, porMes: [] };
+  for (var e = 0; e < filasE.length; e++) {
+    res.total++;
+    var es = filasE[e].estado;
+    if (es === ESTADO_ENTREGA_INICIAL) res.pendientes++;
+    else if (es === 'Devuelto') res.devueltas++;
+    else if (es === 'Devuelto parcial') res.parciales++;
+    else if (es === 'Dañado') res.danadas++;
+    else if (es === 'Extraviado') res.extraviadas++;
+    else if (es === ESTADO_ENTREGA_SIN_DEVOLUCION) res.entregadas++;
+  }
+  var ahora = new Date();
+  var MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  var porMes = {};
+  for (var m = 5; m >= 0; m--) {
+    var d = new Date(ahora.getFullYear(), ahora.getMonth() - m, 1);
+    var clave = d.getFullYear() + '-' + d.getMonth();
+    porMes[clave] = { mes: MESES[d.getMonth()], anio: d.getFullYear(), n: 0 };
+  }
+  for (var e2 = 0; e2 < filasE.length; e2++) {
+    var fe = _parseDate(filasE[e2].fechaEntrega);
+    if (fe) {
+      var c2 = fe.getFullYear() + '-' + fe.getMonth();
+      if (porMes[c2]) porMes[c2].n++;
+    }
+  }
+  res.porMes = Object.keys(porMes).map(function (c3) { return porMes[c3]; });
+  return res;
+}
+
+/** Resumen de servicios (V2): activos y total. */
+function _resumenServicios(ss) {
+  var filas = _tablaV2(ss, HOJA_V2.servicios, COL_SERVICIO, N_COLS_SERVICIO);
+  var activos = 0;
+  for (var i = 0; i < filas.length; i++) if (String(filas[i].estado || '') === 'Activo') activos++;
+  return { total: filas.length, activos: activos };
+}
+
 function obtenerResumenDashboardV2() {
   try {
     var ss = _ss();
@@ -276,6 +354,10 @@ function obtenerResumenDashboardV2() {
     var alertasRes = obtenerAlertasV2();
     var alertas = alertasRes.ok ? alertasRes.data : { total: 0, criticas: 0, alertas: [] };
     var filasE = _leerEntregas(ss);
+    // V3.4K (0.1): el agregador consolida TODO el resumen del panel en UNA
+    // llamada (catálogo, inventario, entregas, servicios, asistencia) — el
+    // Dashboard deja de componer 6 APIs en paralelo.
+    var asistenciaRes = obtenerEstadisticasAsistenciaV2();
 
     return _resOk({
       esquemaV2: ESQUEMA_V2,
@@ -289,6 +371,11 @@ function obtenerResumenDashboardV2() {
         porCargo: porCargo,
         porArea: porArea
       },
+      catalogo: _resumenCatalogo(ss),
+      inventario: _resumenInventario(ss),
+      entregas: _resumenEntregas(filasE),
+      servicios: _resumenServicios(ss),
+      asistencia: asistenciaRes.ok ? asistenciaRes.data : { resumen: { total: 0, presentes: 0, ausentes: 0 }, porcentajePresencia: 0, porMes: [] },
       alertas: alertas,
       resumenAlerta: { total: alertas.total, criticas: alertas.criticas },
       actividadReciente: _actividadReciente(ss, filasE),

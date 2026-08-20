@@ -160,7 +160,8 @@ var EntregasModule = (function () {
       '<div id="ent-lista-el"></div>';
     var listaEl = document.getElementById('ent-lista-el');
     listaEl.innerHTML = App.empty('catalogo', 'Cargando catálogo…', '');
-    App.pedir('buscarElementos').then(function (res) {
+    // V3.4K (0.1): caché compartida de catálogo (trasCambio invalida todo).
+    App.memo('catalogo', 30000, function () { return App.pedir('buscarElementos'); }).then(function (res) {
       var activos = (res || []).filter(function (e) { return e.activo; });
       var pintar = function (q) {
         var filtro = activos.filter(function (e) {
@@ -439,7 +440,11 @@ var EntregasModule = (function () {
     var msj = document.getElementById('ent-m-msj');
     area.innerHTML = App.empty('inventario', 'Consultando catálogo y stock…', '');
 
-    Promise.all([App.pedir('buscarElementos'), App.pedir('obtenerInventario')]).then(function (res) {
+    // V3.4K (0.1): caché compartida de catálogo + inventario (trasCambio invalida todo).
+    Promise.all([
+      App.memo('catalogo', 30000, function () { return App.pedir('buscarElementos'); }),
+      App.memo('inventario', 30000, function () { return App.pedir('obtenerInventario'); })
+    ]).then(function (res) {
       w.catalogo = (res[0] || []).filter(function (e) { return e.activo; });
       var porEl = {};
       w.catalogo.forEach(function (e) { porEl[e.id] = e; });

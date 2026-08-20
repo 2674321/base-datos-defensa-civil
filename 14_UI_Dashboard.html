@@ -16,14 +16,22 @@ var DashboardModule = (function () {
     'Aspirante': '#A6861A', 'Disponible': '#0B92E0', 'Voluntario': '#2E7D4F', 'Reserva': '#6D5AA8'
   };
   var COLOR_ESTADOS_INV = {
-    'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B'
+    'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B', 'Sin estado': '#9AA6B2'
   };
 
-  function kpi(iconoNombre, clase, numero, label) {
+  function pct(n, total) {
+    return total ? Math.round((n / total) * 100) : 0;
+  }
+
+  function kpi(iconoNombre, clase, numero, label, porcentaje) {
     return '<div class="stat-card">' +
       '<div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
-      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
-      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
+      '<div style="min-width:0;flex:1"><div class="stat-num">' + numero + '</div>' +
+      '<div class="stat-label">' + App.h(label) + '</div>' +
+      (porcentaje === undefined || isNaN(porcentaje)
+        ? ''
+        : '<div class="kpi-barra ' + clase + '"><span style="width:' + Math.max(0, Math.min(100, porcentaje)) + '%"></span></div>') +
+      '</div></div>';
   }
 
   function render(d) {
@@ -50,15 +58,16 @@ var DashboardModule = (function () {
 
     var kpis = document.createElement('div');
     kpis.className = 'rejilla-kpi';
+    var invTotal = (inv.disponible || 0) + (inv.entregado || 0) + (inv.danado || 0) + (inv.extraviado || 0) + (inv.baja || 0) + (inv.sinEstado || 0);
     kpis.innerHTML =
-      kpi('voluntarios', 'verde', v.activos || 0, 'Voluntarios activos') +
+      kpi('voluntarios', 'verde', v.activos || 0, 'Voluntarios activos', pct(v.activos, v.total)) +
       kpi('voluntarios', 'azul', v.total || 0, 'Voluntarios registrados') +
-      kpi('servicios', 'celeste', srv.activos || 0, 'Servicios activos') +
-      kpi('asistencia', 'verde', asi.porcentajePresencia !== undefined ? asi.porcentajePresencia + '%' : '—', 'Presencia en asistencia') +
-      kpi('catalogo', 'azul', cat.activos || 0, 'Elementos catalogados') +
-      kpi('inventario', 'verde', inv.disponible || 0, 'Stock disponible') +
-      kpi('devolver', 'ambar', ent.pendientes || 0, 'Pendientes de devolución') +
-      kpi('alerta', crit > 0 ? 'rojo' : 'gris', alertas.length, 'Alertas');
+      kpi('servicios', 'celeste', srv.activos || 0, 'Servicios activos', pct(srv.activos, srv.total)) +
+      kpi('asistencia', 'verde', asi.porcentajePresencia !== undefined ? asi.porcentajePresencia + '%' : '—', 'Presencia en asistencia', asi.porcentajePresencia) +
+      kpi('catalogo', 'azul', cat.activos || 0, 'Elementos catalogados', pct(cat.activos, cat.total)) +
+      kpi('inventario', 'verde', inv.disponible || 0, 'Stock disponible', pct(inv.disponible, invTotal)) +
+      kpi('devolver', 'ambar', ent.pendientes || 0, 'Pendientes de devolución', pct(ent.pendientes, ent.total)) +
+      kpi('alerta', crit > 0 ? 'rojo' : 'gris', alertas.length, 'Alertas', alertas.length ? 100 : 0);
     cont.appendChild(kpis);
 
     /* Fila: alertas + actividad */
@@ -185,7 +194,9 @@ var DashboardModule = (function () {
 
   function renderApiladas(cuerpo, inv) {
     if (!cuerpo) return;
-    var estados = ['Disponible', 'Entregado', 'Dañado', 'Extraviado', 'Baja'];
+    // V3.4K (8): 'Sin estado' es categoría explícita (estados vacíos/inválidos
+    // nunca se pierden ni se mal-categorizan; la hoja real está limpia).
+    var estados = ['Disponible', 'Entregado', 'Dañado', 'Extraviado', 'Baja', 'Sin estado'];
     var porElem = inv.porElemento || [];
     if (!porElem.length) {
       cuerpo.innerHTML = App.empty('inventario', 'Sin inventario', 'Registra existencias para ver la distribución.');
@@ -261,7 +272,8 @@ var DashboardModule = (function () {
   }
 
   function abrirEntradaInventario() {
-    App.pedir('buscarElementos').then(function (elementos) {
+    // V3.4K (0.1): caché compartida de catálogo (trasCambio invalida todo).
+    App.memo('catalogo', 30000, function () { return App.pedir('buscarElementos'); }).then(function (elementos) {
       var activos = elementos.filter(function (e) { return e.activo; });
       var opts = activos.map(function (e) {
         return '<option value="' + App.h(e.id) + '">' + App.h(e.elemento) + ' (' + App.h(e.id) + ')</option>';
@@ -312,97 +324,28 @@ var DashboardModule = (function () {
     });
   }
 
-  /* ---- Carga (agregador V2 + composición de lectura) ---- */
-
-  function mesClave(fechaTexto) {
-    var partes = String(fechaTexto || '').split('/');
-    if (partes.length !== 3) return null;
-    var d = new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
-    return isNaN(d.getTime()) ? null : { anio: d.getFullYear(), mes: d.getMonth(), d: d };
-  }
-
-  function entregasPorMes(lista) {
-    var MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    var ahora = new Date();
-    var porMes = {};
-    for (var m = 5; m >= 0; m--) {
-      var d0 = new Date(ahora.getFullYear(), ahora.getMonth() - m, 1);
-      var clave = d0.getFullYear() + '-' + d0.getMonth();
-      porMes[clave] = { mes: MESES[d0.getMonth()], anio: d0.getFullYear(), n: 0 };
-    }
-    for (var i = 0; i < lista.length; i++) {
-      var c = mesClave(lista[i].fechaEntrega);
-      if (c) {
-        var k = c.anio + '-' + c.mes;
-        if (porMes[k]) porMes[k].n++;
-      }
-    }
-    return Object.keys(porMes).map(function (k) { return porMes[k]; });
-  }
-
-  function inventarioResumen(filasInv) {
-    var res = { disponible: 0, entregado: 0, danado: 0, extraviado: 0, baja: 0, porElemento: [] };
-    var porElem = {};
-    for (var i = 0; i < filasInv.length; i++) {
-      var f = filasInv[i];
-      if (f.estado === 'Disponible') res.disponible += f.cantidad;
-      else if (f.estado === 'Entregado') res.entregado += f.cantidad;
-      else if (f.estado === 'Dañado') res.danado += f.cantidad;
-      else if (f.estado === 'Extraviado') res.extraviado += f.cantidad;
-      else if (f.estado === 'Baja') res.baja += f.cantidad;
-      if (!porElem[f.elementoId]) porElem[f.elementoId] = { elemento: f.elemento, porEstado: {}, total: 0 };
-      porElem[f.elementoId].porEstado[f.estado] = (porElem[f.elementoId].porEstado[f.estado] || 0) + f.cantidad;
-      porElem[f.elementoId].total += f.cantidad;
-    }
-    res.porElemento = Object.keys(porElem).map(function (id) {
-      return { elemento: porElem[id].elemento, total: porElem[id].total, porEstado: porElem[id].porEstado };
-    }).sort(function (a, b) { return b.total - a.total; }).slice(0, 8);
-    return res;
-  }
-
-  function entregasResumen(lista) {
-    var pendientes = 0;
-    for (var i = 0; i < lista.length; i++) {
-      if (lista[i].estado === 'Pendiente de devolución') pendientes++;
-    }
-    return { total: lista.length, pendientes: pendientes, porMes: entregasPorMes(lista) };
-  }
+  /* ---- Carga: UNA llamada al agregador V2 (V3.4K 0.1) ---- */
 
   function cargar() {
+    // Memo 30 s compartido con refrescarAlertas (App): el panel y la campana
+    // usan el mismo agregador sin consultas extra.
     App.memo('dashboard', 30000, function () {
-      return Promise.all([
-        App.pedir('obtenerResumenDashboardV2'),
-        App.pedir('buscarElementos'),
-        App.pedir('obtenerInventario'),
-        App.pedir('obtenerHistorialEntregasV2'),
-        App.pedir('listarServiciosV2'),
-        App.pedir('obtenerEstadisticasAsistenciaV2')
-      ]).then(function (r) {
-        var v2 = r[0];
-        var elementos = r[1] || [];
-        var inv = inventarioResumen(r[2] || []);
-        var ent = entregasResumen(r[3] || []);
-        var srv = r[4] || [];
-        var asi = r[5] || {};
-        var alertasInfo = (v2 && v2.alertas) || { total: 0, criticas: 0, alertas: [] };
-        var catalogados = 0;
-        for (var i = 0; i < elementos.length; i++) if (elementos[i].activo) catalogados++;
-        var activosSrv = 0;
-        for (var j = 0; j < srv.length; j++) if (srv[j].estado === 'Activo') activosSrv++;
-        return {
-          voluntarios: (v2 && v2.voluntarios) || {},
-          catalogo: { activos: catalogados, total: elementos.length },
-          inventario: inv,
-          entregas: ent,
-          servicios: { activos: activosSrv, total: srv.length },
-          asistencia: asi,
-          alertas: alertasInfo.alertas || [],
-          resumenAlerta: { total: alertasInfo.total || 0, criticas: alertasInfo.criticas || 0 },
-          actividadReciente: (v2 && v2.actividadReciente) || [],
-          version: (v2 && v2.version) || '',
-          generado: (v2 && v2.generado) || ''
-        };
-      });
+      return App.pedir('obtenerResumenDashboardV2');
+    }).then(function (v2) {
+      var alertasInfo = (v2 && v2.alertas) || { total: 0, criticas: 0, alertas: [] };
+      return {
+        voluntarios: (v2 && v2.voluntarios) || {},
+        catalogo: (v2 && v2.catalogo) || {},
+        inventario: (v2 && v2.inventario) || {},
+        entregas: (v2 && v2.entregas) || {},
+        servicios: (v2 && v2.servicios) || {},
+        asistencia: (v2 && v2.asistencia) || {},
+        alertas: alertasInfo.alertas || [],
+        resumenAlerta: { total: alertasInfo.total || 0, criticas: alertasInfo.criticas || 0 },
+        actividadReciente: (v2 && v2.actividadReciente) || [],
+        version: (v2 && v2.version) || '',
+        generado: (v2 && v2.generado) || ''
+      };
     }).then(render).catch(function (err) {
       cont.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el panel.</strong> ' + App.h(err.message || err));
     });
