@@ -50,6 +50,22 @@
         <span class="dot dot-ok" id="usuario-dot" title="Sesión de Google"></span>
         Sistema operativo
       </span>
+      <!-- V3.4K (6): accesos rápidos de escritorio (navegación directa) -->
+      <span class="accesos-rapidos" aria-label="Accesos rápidos">
+        <button class="bell acceso-rapido" data-rapido="voluntarios" title="Ir a Voluntarios" aria-label="Ir a Voluntarios">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3.5 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.8"/><path d="M15.5 14.2c2.4.2 4.3 1.7 5 4.8"/></svg>
+        </button>
+        <button class="bell acceso-rapido" data-rapido="entregas" title="Ir a Entregas" aria-label="Ir a Entregas">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M9 3h6v4H9z"/><path d="M5 5h4M15 5h4"/><rect x="3" y="9" width="18" height="11" rx="2"/><path d="M3 13h18"/></svg>
+        </button>
+        <button class="bell acceso-rapido" data-rapido="inventario" title="Ir a Inventario" aria-label="Ir a Inventario">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M16.5 9.4 7.5 4.2"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+        </button>
+      </span>
+      <!-- V3.4K (6): móvil — agrupa navegación en ⋮ -->
+      <button class="bell btn-mas" id="btn-mas" title="Más opciones" aria-label="Más opciones" aria-expanded="false">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      </button>
       <button class="bell" id="btn-alertas" title="Ver alertas del panel" aria-label="Alertas del sistema">
         <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="nav-badge gris oculta" id="bell-alertas">0</span>
@@ -87,14 +103,23 @@
           <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M3.5 19c.6-3.2 2.9-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.8"/><path d="M15.5 14.2c2.4.2 4.3 1.7 5 4.8"/></svg>
           <span>Voluntarios</span>
         </a>
-        <a class="nav-item" href="#/servicios" data-ruta="servicios">
-          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
-          <span>Servicios</span>
-        </a>
-        <a class="nav-item" href="#/asistencia" data-ruta="asistencia">
-          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 15l3 3 5-5"/></svg>
-          <span>Asistencia</span>
-        </a>
+        <div class="nav-grupo-exp" id="grupo-asistencia">
+          <button class="nav-item" id="btn-grupo-asistencia" aria-expanded="false" aria-controls="sub-asistencia">
+            <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span>Asistencia y Servicios</span>
+            <span class="nav-flecha" aria-hidden="true">▶</span>
+          </button>
+          <div class="nav-sub" id="sub-asistencia">
+            <a class="nav-item" href="#/servicios" data-ruta="servicios">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+              <span>Servicios</span>
+            </a>
+            <a class="nav-item" href="#/asistencia" data-ruta="asistencia">
+              <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 15l3 3 5-5"/></svg>
+              <span>Asistencia</span>
+            </a>
+          </div>
+        </div>
 
         <div class="nav-grupo">Equipamiento</div>
         <div class="nav-grupo-exp" id="grupo-equipamiento">
@@ -185,7 +210,12 @@
           </div>
         </div>
       </nav>
-      <div class="sidebar-pie">Versión <span id="app-version">—</span></div>
+      <div class="sidebar-pie">
+        <button class="btn-icono" id="btn-sidebar-mini" type="button" aria-label="Colapsar barra lateral" title="Colapsar barra lateral">
+          <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <span class="sidebar-version">Versión <span id="app-version">—</span></span>
+      </div>
     </aside>
 
     <main class="content" id="content">

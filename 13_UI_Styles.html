@@ -190,14 +190,14 @@ button { font-family: inherit; }
   background: rgba(3, 15, 28, 0.18);
 }
 .logo-institucional { display: block; object-fit: contain; }
-.logo-sidebar { width: 52px; height: 52px; border-radius: var(--radio-md); background: #FFFFFF; box-shadow: var(--sombra-sm); flex-shrink: 0; }
+.logo-sidebar { width: 52px; height: 52px; border-radius: var(--radio-md); flex-shrink: 0; }
 .sidebar-logo-texto { line-height: 1.35; min-width: 0; }
 .sidebar-logo-texto strong {
   font-size: var(--t-small); font-weight: var(--peso-negrita); letter-spacing: 0.07em; color: #FFFFFF;
 }
 .sidebar-logo-texto span {
   font-size: var(--t-caption); letter-spacing: 0.04em; color: rgba(243, 246, 250, 0.55);
-  text-transform: uppercase;
+  text-transform: uppercase; display: block; margin-top: 2px;
 }
 .nav { flex: 1; overflow-y: auto; padding: var(--esp-3) var(--esp-3) var(--esp-4); }
 .nav-grupo {
@@ -239,7 +239,39 @@ button { font-family: inherit; }
 .sidebar-pie {
   padding: var(--esp-3) var(--esp-4); font-size: var(--t-caption); color: rgba(243, 246, 250, 0.4);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
 }
+#btn-sidebar-mini { color: rgba(243, 246, 250, 0.7); }
+#btn-sidebar-mini:hover { color: #FFFFFF; background: rgba(255, 255, 255, 0.08); }
+/* V3.4K (3): sidebar colapsable (mini) — solo ≥1024 px; en <1024 px el drawer
+   conserva el ancho completo y el colapso no aplica. */
+.sidebar.mini { width: 68px; }
+.sidebar.mini .sidebar-logo { justify-content: center; padding: var(--esp-4) var(--esp-2) var(--esp-3); }
+.sidebar.mini .logo-sidebar { width: 40px; height: 40px; }
+.sidebar.mini .sidebar-logo-texto,
+.sidebar.mini .nav-grupo,
+.sidebar.mini .nav-item span,
+.sidebar.mini .nav-badge,
+.sidebar.mini .nav-flecha,
+.sidebar.mini .sidebar-version { display: none; }
+.sidebar.mini .nav { padding: var(--esp-3) var(--esp-2) var(--esp-4); }
+.sidebar.mini .nav-item { justify-content: center; padding: 10px 0; }
+.sidebar.mini .nav-item .ico { width: 20px; height: 20px; }
+.sidebar.mini .nav-grupo-exp { position: relative; }
+.sidebar.mini .nav-sub {
+  display: none; position: absolute; left: calc(100% + 6px); top: 0; z-index: var(--z-dropdown);
+  background: var(--superficie); color: var(--texto-1); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); box-shadow: var(--sombra-md);
+  padding: var(--esp-2); margin: 0; min-width: 210px;
+}
+.sidebar.mini .nav-sub .nav-item { justify-content: flex-start; padding: 8px var(--esp-3); color: var(--texto-2); }
+.sidebar.mini .nav-sub .nav-item:hover { background: var(--neutro-claro); color: var(--texto-1); text-decoration: none; }
+.sidebar.mini .nav-sub .nav-item span { display: block; }
+.sidebar.mini .nav-grupo-exp.abierto .nav-sub { display: block; }
+.sidebar.mini .nav-grupo-exp.abierto > .nav-item { background: rgba(255, 255, 255, 0.08); }
+.sidebar.mini .sidebar-pie { justify-content: center; padding: var(--esp-3) var(--esp-2); }
+body.dc-mini .content { margin-left: 68px; }
+body.dc-mini .app-header { left: 68px; }
 .overlay-movil { display: none; }
 
 /* ---------- 5. HEADER ---------- */
@@ -256,8 +288,11 @@ button { font-family: inherit; }
 .logo-header { width: 36px; height: 36px; border-radius: var(--radio-sm); flex-shrink: 0; }
 .logo-texto { line-height: 1.25; min-width: 0; }
 .logo-titulo { font-size: var(--t-small); font-weight: var(--peso-negrita); letter-spacing: 0.05em; color: var(--texto-1); }
-.logo-sub { font-size: var(--t-caption); color: var(--texto-3); }
+.logo-sub { font-size: var(--t-caption); color: var(--texto-3); margin-top: 2px; }
 .header-der { display: flex; align-items: center; gap: var(--esp-3); }
+.accesos-rapidos { display: inline-flex; align-items: center; gap: var(--esp-2); }
+.acceso-rapido { display: inline-flex; } /* V3.4K (6): accesos rápidos del header (comparten estilo .bell) */
+.btn-mas { display: none; }
 .seccion-actual { font-size: var(--t-body); font-weight: var(--peso-fuerte); color: var(--texto-1); }
 .estado-sistema { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-caption); color: var(--texto-3); background: var(--superficie-2); border: 1px solid var(--borde); border-radius: var(--radio-pill); padding: 3px 10px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dc-gris-300); display: inline-block; }
@@ -370,6 +405,14 @@ button { font-family: inherit; }
 .stat-ico.violeta { background: var(--dc-violeta-100); color: var(--dc-violeta-500); }
 .stat-num { font-size: 26px; font-weight: var(--peso-negrita); letter-spacing: -0.02em; color: var(--texto-1); line-height: 1.15; }
 .stat-label { font-size: var(--t-small); color: var(--texto-3); }
+/* V3.4K (7): barras proporcionales en KPIs (CSS puro, sin librerías). */
+.kpi-barra { height: 6px; border-radius: var(--radio-pill); background: var(--dc-gris-100); overflow: hidden; margin-top: 6px; }
+.kpi-barra span { display: block; height: 100%; border-radius: inherit; background: var(--primario); transition: width 420ms ease-out; }
+.kpi-barra.verde span { background: var(--ok); }
+.kpi-barra.ambar span { background: var(--aviso); }
+.kpi-barra.rojo span { background: var(--peligro); }
+.kpi-barra.celeste span { background: var(--info); }
+.kpi-barra.gris span { background: var(--neutro); }
 
 /* ---------- 8. BADGES Y ESTADOS ---------- */
 .badge {
@@ -663,6 +706,31 @@ button { font-family: inherit; }
 .tl-detalle { font-size: var(--t-small); color: var(--texto-2); }
 .tl-fecha { font-size: var(--t-caption); color: var(--texto-3); }
 
+/* ---------- 19b. HISTORIAL COLABSABLE (V3.4K 1) ---------- */
+.hist-grupo { border: 1px solid var(--borde); border-radius: var(--radio-md); margin-bottom: var(--esp-2); overflow: hidden; }
+.hist-grupo .hist-grupo { margin-left: var(--esp-4); margin-right: 0; border-radius: var(--radio-sm); }
+.hist-cabecera {
+  display: flex; align-items: center; gap: var(--esp-2); width: 100%;
+  padding: var(--esp-2) var(--esp-3); background: var(--superficie-2);
+  border: 0; border-radius: inherit; cursor: pointer; text-align: left;
+  font: inherit; color: var(--texto-1); transition: background var(--trans-fast);
+}
+.hist-cabecera:hover { background: var(--neutro-claro); }
+.hist-grupo.hist-mes .hist-cabecera { background: var(--superficie); }
+.hist-grupo.hist-semana .hist-cabecera { background: var(--superficie); padding-left: var(--esp-4); }
+.hist-chevron { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; color: var(--texto-3); transition: transform var(--trans-fast); flex-shrink: 0; }
+.hist-cabecera[aria-expanded="false"] .hist-chevron { transform: rotate(-90deg); }
+.hist-chevron .ico { width: 14px; height: 14px; }
+.hist-titulo { font-size: var(--t-body); font-weight: var(--peso-fuerte); }
+.hist-mes .hist-titulo { font-weight: var(--peso-fuerte); }
+.hist-semana .hist-titulo { font-size: var(--t-small); font-weight: var(--peso-normal); }
+.hist-count { margin-left: auto; font-size: var(--t-caption); color: var(--texto-3); white-space: nowrap; }
+.hist-contenido { padding: var(--esp-2) var(--esp-3) var(--esp-2) var(--esp-6); }
+.hist-grupo.hist-semana .hist-contenido { padding-left: var(--esp-3); padding-bottom: var(--esp-1); }
+.hist-semana .hist-contenido .timeline { padding-left: var(--esp-4); }
+.hist-semana .timeline::before { left: 5px; }
+.hist-semana .tl-item::before { left: calc(-1 * var(--esp-4) + 2px); width: 8px; height: 8px; }
+
 /* ---------- 20. STEPPER (asistente) ---------- */
 .stepper { display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-5); overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
 .stepper::-webkit-scrollbar { display: none; }
@@ -770,10 +838,29 @@ button { font-family: inherit; }
 @media (max-width: 1024px) {
   .content { margin-left: 0; }
   .app-header { left: 0; }
+  body.dc-mini .content { margin-left: 0; }
+  body.dc-mini .app-header { left: 0; }
   .sidebar {
     transform: translateX(-100%);
     box-shadow: var(--sombra-lg);
   }
+  .sidebar.mini { width: 264px; }
+  .sidebar.mini .sidebar-logo { justify-content: flex-start; padding: var(--esp-4) var(--esp-4) var(--esp-3); }
+  .sidebar.mini .logo-sidebar { width: 52px; height: 52px; }
+  .sidebar.mini .sidebar-logo-texto,
+  .sidebar.mini .nav-grupo,
+  .sidebar.mini .nav-item span,
+  .sidebar.mini .nav-badge,
+  .sidebar.mini .nav-flecha,
+  .sidebar.mini .sidebar-version { display: block; }
+  .sidebar.mini .sidebar-version { display: inline; }
+  .sidebar.mini .nav { padding: var(--esp-3) var(--esp-3) var(--esp-4); }
+  .sidebar.mini .nav-item { justify-content: flex-start; padding: 9px var(--esp-3); }
+  .sidebar.mini .nav-item .ico { width: 18px; height: 18px; }
+  .sidebar.mini .nav-sub { position: static; background: transparent; border: 0; box-shadow: none; padding: 0; margin: 2px 0 4px var(--esp-4); min-width: 0; border-left: 1px solid rgba(255, 255, 255, 0.14); border-radius: 0; }
+  .sidebar.mini .nav-sub .nav-item { color: rgba(243, 246, 250, 0.82); }
+  .sidebar.mini .nav-sub .nav-item:hover { background: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+  .sidebar.mini .sidebar-pie { justify-content: space-between; padding: var(--esp-3) var(--esp-4); }
   .sidebar.abierta { transform: translateX(0); }
   .overlay-movil {
     position: fixed; inset: 0; z-index: calc(var(--z-sticky) - 1);
@@ -792,6 +879,8 @@ button { font-family: inherit; }
   .page-cabecera { flex-direction: column; align-items: flex-start; }
   .seccion-actual { display: none; }
   .estado-sistema { display: none; }
+  .accesos-rapidos { display: none; }
+  .btn-mas { display: inline-flex; }
   .usuario-info, .usuario-chevron { display: none; }
   .campo-fila { grid-template-columns: 1fr; }
   .tabla-wrap { border-radius: var(--radio-md); }
