@@ -608,7 +608,7 @@ body.dc-mini .app-header { left: 68px; }
 .toast-cerrar .ico { width: 13px; height: 13px; }
 
 /* ---------- 15. LOADING ---------- */
-.cargando { display: flex; align-items: center; gap: var(--esp-3); padding: var(--esp-5); color: var(--texto-2); font-size: var(--t-small); justify-content: center; }
+.cargando { display: flex; align-items: center; gap: var(--esp-3); padding: var(--esp-5); color: var(--texto-2); font-size: var(--t-small); justify-content: center; min-height: 200px; }
 /* V3.4J: display:inline-block es OBLIGATORIO. Sin él, el <span class="spinner"> del splash
    es inline y width/height se ignoran: el círculo colapsa a una píldora vertical con borde
    de dos tonos que en PC se percibe como "círculos apilados". Ahora el círculo es un solo
@@ -637,6 +637,7 @@ body.dc-mini .app-header { left: 68px; }
   background: linear-gradient(90deg, var(--dc-gris-100) 25%, var(--dc-gris-50) 50%, var(--dc-gris-100) 75%);
   background-size: 200% 100%; border-radius: var(--radio-sm);
   animation: brillo 1.4s ease infinite;
+  height: 14px;
 }
 @keyframes brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
