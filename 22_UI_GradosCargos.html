@@ -60,9 +60,10 @@ var GradosCargosModule = (function () {
 
     if (pestaña === 'grados') {
       // V3.4F: jerarquía visual — el distintivo "Jefe de Sede" (cargo/condición
-      // de mando, NO grado) se muestra entre Instructor Mayor y Comandante Local.
-      // V3.4H: "Jefe de sede" es ahora un GRADO real (orden 2). Solo se muestra
-      // la fila meta si NO existe un grado real con ese nombre (backward compat).
+      // de mando, NO grado) se mostraba entre Instructor Mayor y Comandante Local.
+      // V3.4H: "Jefe de sede" es ahora un GRADO real (orden 2).
+      // V3.4K (0.2): la META lo modela como GRADO g-7 (origen OFICIAL); la fila
+      // meta solo se muestra si NO existe un grado real con ese nombre (compat).
       var metaJefe = App.meta('Jefe de Sede') || {};
       var tieneGradoReal = grados.some(function (g) { return /jefe de sede/i.test(g.nombre); });
       var filaJefe = (!tieneGradoReal && metaJefe.tipo === 'DISTINTIVO')
@@ -72,7 +73,7 @@ var GradosCargosModule = (function () {
           '<td>' + App.badge('Activo', 'ok') + '</td></tr>'
         : '';
       card.innerHTML =
-        '<div class="card-cabecera"><strong>Grados</strong><span class="texto-dim">Escala jerárquica (semilla institucional, no editable) — el Jefe de Sede es cargo/condición de mando con distintivo propio, no grado</span></div>' +
+        '<div class="card-cabecera"><strong>Grados</strong><span class="texto-dim">Escala jerárquica (semilla institucional, no editable) — 7 grados OFICIALES; Jefe de Sede es grado real (UNI 2018: 3 barras) y coexiste con el cargo del mismo nombre</span></div>' +
         '<div class="card-cuerpo sin-pad">' +
         '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>#</th><th>Grado</th><th>Origen</th><th>Estado</th></tr></thead><tbody>' +
         grados.map(function (g) {
