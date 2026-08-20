@@ -1011,5 +1011,13 @@ body.dc-mini .app-header { left: 68px; }
 .nav-item:active { background: rgba(255, 255, 255, 0.14); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  /* V3.4L: la transición ENTRE SECCIONES y la barra de progreso SIEMPRE se animan.
+     Causa raíz del bug persistente: con reduce-motion del SO (Windows) la rama JS
+     saltaba la animación y el CSS colapsaba la barra a un destello de ~100 ms
+     imperceptible. Estas excepciones garantizan la barra (>=400 ms) y el fundido
+     de página visibles en cualquier entorno. */
+  .barra-carga { transition-duration: 200ms !important; }
+  .page.saliendo, .page.activa { animation-duration: 200ms !important; }
+  .page.activa.vista-nueva .stat-card, .page.activa.vista-nueva .tl-item, .page.activa.vista-nueva .barra-seg { animation-duration: 260ms !important; }
 }
 </style>
