@@ -101,7 +101,7 @@ var EntregasModule = (function () {
       '<div id="ent-lista-vol"></div>';
     var listaVol = document.getElementById('ent-lista-vol');
     listaVol.innerHTML = App.empty('voluntarios', 'Cargando voluntarios…', '');
-    App.pedir('listarPersonasV2').then(function (res) {
+    App.memo('personas', 30000, function () { return App.pedir('listarPersonasV2'); }).then(function (res) {
       var activos = (res || []).filter(function (v) {
         return v.voluntarioId !== null && v.voluntarioId !== undefined && v.estado === 'Activo';
       });
@@ -882,7 +882,7 @@ var EntregasModule = (function () {
       }
       App.skeleton(cont, 5);
       if (w.voluntario && w.voluntario.id && !w.voluntario.nombreCompleto) {
-        App.pedir('listarPersonasV2').then(function (personas) {
+        App.memo('personas', 30000, function () { return App.pedir('listarPersonasV2'); }).then(function (personas) {
           var v = (personas || []).find(function (p) {
             return p.voluntarioId !== null && String(p.voluntarioId) === String(params.id);
           });

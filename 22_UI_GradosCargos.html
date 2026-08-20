@@ -12,12 +12,12 @@ var GradosCargosModule = (function () {
   var pestaña = 'grados';
 
   function cargar() {
-    App.pedir('listarGradosV2').then(function (res) { grados = res || []; })
+    App.memo('grados', 30000, function () { return App.pedir('listarGradosV2'); }).then(function (res) { grados = res || []; })
       .catch(function () { grados = []; })
-      .then(function () { return App.pedir('listarCargosV2'); })
+      .then(function () { return App.memo('cargos', 30000, function () { return App.pedir('listarCargosV2'); }); })
       .then(function (res) { cargos = res || []; })
       .catch(function () { cargos = []; })
-      .then(function () { return App.pedir('listarAreasV2'); })
+      .then(function () { return App.memo('areas', 30000, function () { return App.pedir('listarAreasV2'); }); })
       .then(function (res) { areas = res || []; render(); })
       .catch(function () { areas = []; render(); });
   }

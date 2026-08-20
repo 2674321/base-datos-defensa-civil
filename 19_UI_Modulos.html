@@ -10,7 +10,7 @@ var ServiciosModule = (function () {
   var estadoFiltro = '';
 
   function cargar() {
-    App.pedir('listarServiciosV2').then(function (res) { lista = res || []; pintar(); })
+    App.memo('servicios', 30000, function () { return App.pedir('listarServiciosV2'); }).then(function (res) { lista = res || []; pintar(); })
       .catch(function (err) {
         var cuerpo = cont.querySelector('#serv-cuerpo');
         if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudieron cargar los servicios.</strong> ' + App.h(err.message || err));
@@ -200,7 +200,7 @@ var ServiciosModule = (function () {
   }
 
   function abrirAsignacion(servicioId, mPadre) {
-    App.pedir('listarPersonasV2').then(function (personas) {
+    App.memo('personas', 30000, function () { return App.pedir('listarPersonasV2'); }).then(function (personas) {
       var candidatos = (personas || []).filter(function (p) { return p.voluntarioId; });
       if (!candidatos.length) { App.toast('No hay voluntarios V2 para asignar', 'aviso'); return; }
       var m = App.modal({
@@ -255,7 +255,7 @@ var AsistenciaModule = (function () {
   var servicioActual = null;
 
   function cargarServicios() {
-    return App.pedir('listarServiciosV2').then(function (res) { servicios = res || []; });
+    return App.memo('servicios', 30000, function () { return App.pedir('listarServiciosV2'); }).then(function (res) { servicios = res || []; });
   }
 
   function render() {

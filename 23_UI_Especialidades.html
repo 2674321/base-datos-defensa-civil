@@ -11,12 +11,12 @@ var EspecialidadesModule = (function () {
   var pestaña = 'esp';
 
   function cargar() {
-    App.pedir('listarEspecialidadesV2').then(function (res) { esp = res || []; })
+    App.memo('especialidades', 30000, function () { return App.pedir('listarEspecialidadesV2'); }).then(function (res) { esp = res || []; })
       .catch(function () { esp = []; })
-      .then(function () { return App.pedir('listarSubespecialidadesV2'); })
+      .then(function () { return App.memo('subespecialidades', 30000, function () { return App.pedir('listarSubespecialidadesV2'); }); })
       .then(function (res) { sub = res || []; })
       .catch(function () { sub = []; })
-      .then(function () { return App.pedir('listarAreasV2'); })
+      .then(function () { return App.memo('areas', 30000, function () { return App.pedir('listarAreasV2'); }); })
       .then(function (res) { areas = res || []; render(); })
       .catch(function () { areas = []; render(); });
   }

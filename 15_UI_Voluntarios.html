@@ -349,7 +349,7 @@ var VoluntariosModule = (function () {
   }
 
   function cargar() {
-    return App.pedir('listarPersonasV2').then(function (res) {
+    return App.memo('personas', 30000, function () { return App.pedir('listarPersonasV2'); }).then(function (res) {
       var personas = res || [];
       lista = personas.filter(function (p) { return p.voluntarioId !== null && p.voluntarioId !== undefined; });
       render();
