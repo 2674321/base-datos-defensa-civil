@@ -36,7 +36,7 @@ check('aria-expanded sincronizado', /btn\.setAttribute\('aria-expanded', abierto
 check('rama mini cierra otros grupos', /if \(abierto\) \{\s*var sb = document\.getElementById\('sidebar'\);[\s\S]*?sb\.classList\.contains\('mini'\)/.test(app));
 check('rama mini remueve .abierto de otros', /grupos\[o\] !== grupo && grupos\[o\]\.classList\.contains\('abierto'\)[\s\S]*?grupos\[o\]\.classList\.remove\('abierto'\)/.test(app));
 check('solo aplica cuando abierto (no rompe toggle normal)', /if \(abierto\) \{/.test(app) && /btn\.setAttribute\('aria-expanded', abierto/.test(app));
-check('PROYECTO_VERSION 0.8.9', /PROYECTO_VERSION = '0\.8\.9'/.test(app));
+check('PROYECTO_VERSION 0.9.0', /PROYECTO_VERSION = '0\.9\.0'/.test(app));
 
 console.log('=== 3. Lazy loading — memo() por sección ===');
 const ficha = leer('18_UI_Ficha.html');
@@ -153,13 +153,21 @@ const AppStub = {
   if (inp) {
     inp.value = 'ROF-S';
     inp.dispatchEvent(new win.Event('input', { bubbles: true }));
-    const g2 = cont.querySelectorAll('.hist-grupo');
-    check('búsqueda oculta secciones sin coincidencia', g2.length < SECCIONES_REAL, 'visibles: ' + g2.length);
-    const abiertos = Array.from(cont.querySelectorAll('.hist-cabecera')).filter((b) => b.getAttribute('aria-expanded') === 'true');
-    check('búsqueda auto-expande coincidencias', abiertos.length >= 1 && abiertos.every((b) => b.textContent.indexOf('ROF-S') >= 0 || b.textContent.indexOf('Reglamentos y Documentos') >= 0), abiertos.map((b) => b.textContent.slice(0, 40)).join(' | '));
-    inp.value = '';
-    inp.dispatchEvent(new win.Event('input', { bubbles: true }));
-    check('al limpiar búsqueda vuelve todo colapsado', Array.from(cont.querySelectorAll('.hist-cabecera')).every((b) => b.getAttribute('aria-expanded') === 'false'));
+    // V3.5 añadió debounce de 150 ms al buscador: esperar antes de asertar
+    setTimeout(function () {
+      const g2 = cont.querySelectorAll('.hist-grupo');
+      check('búsqueda oculta secciones sin coincidencia', g2.length < SECCIONES_REAL, 'visibles: ' + g2.length);
+      const abiertos = Array.from(cont.querySelectorAll('.hist-cabecera')).filter((b) => b.getAttribute('aria-expanded') === 'true');
+      check('búsqueda auto-expande coincidencias', abiertos.length >= 1 && abiertos.every((b) => b.textContent.indexOf('ROF-S') >= 0 || b.textContent.indexOf('Reglamentos y Documentos') >= 0), abiertos.map((b) => b.textContent.slice(0, 40)).join(' | '));
+      inp.value = '';
+      inp.dispatchEvent(new win.Event('input', { bubbles: true }));
+      setTimeout(function () {
+        check('al limpiar búsqueda vuelve todo colapsado', Array.from(cont.querySelectorAll('.hist-cabecera')).every((b) => b.getAttribute('aria-expanded') === 'false'));
+        finalizar();
+      }, 300);
+    }, 300);
+  } else {
+    finalizar();
   }
 })();
 
@@ -223,8 +231,10 @@ console.log('=== 6. DOM: toggle mini cierra otros grupos (jsdom) ===');
 
 console.log('=== 7. Backend/versión ===');
 const consts = leer('00_Constantes.js');
-check('00_Constantes.js versión 0.8.9 — V3.4N', /version: '0\.8\.9 — V3\.4N'/.test(consts));
+check('00_Constantes.js versión 0.9.0 — V3.5', /version: '0\.9\.0 — V3\.5'/.test(consts));
 check('Radioaficionado 4 niveles intactos (V3.4M)', /Aspirante; Novicio; General; Superior/.test(consts));
 
-console.log('\nRESULTADO: ' + OK + ' OK, ' + FALLOS + ' FALLOS');
-process.exit(FALLOS ? 1 : 0);
+function finalizar() {
+  console.log('\nRESULTADO: ' + OK + ' OK, ' + FALLOS + ' FALLOS');
+  process.exit(FALLOS ? 1 : 0);
+}
