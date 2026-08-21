@@ -6,7 +6,7 @@
 
 var PROYECTO = {
   nombre: 'Base de datos D.C. "La Serena"',
-  version: '0.8.9 — V3.4N'
+  version: '0.9.0 — V3.5'
 };
 
 var SS_ID = 'SS_ID_REDACTED';
