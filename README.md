@@ -1,5 +1,8 @@
 # 🛡️ Base de Datos Defensa Civil
 
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) ![Versión](https://img.shields.io/badge/versi%C3%B3n-v0.9.0-green) ![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) [![CI](https://github.com/2674321/base-datos-defensa-civil/actions/workflows/ci.yml/badge.svg)](https://github.com/2674321/base-datos-defensa-civil/actions/workflows/ci.yml)
+
+
 Sistema integral de **gestión para Defensa Civil** construido sobre **Google Apps Script**
 con Google Sheets como capa de datos y una **UI web propia** (single-page) servida por el
 mismo Apps Script.
