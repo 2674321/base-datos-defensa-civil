@@ -23,16 +23,7 @@ var DashboardModule = (function () {
     return total ? Math.round((n / total) * 100) : 0;
   }
 
-  function kpi(iconoNombre, clase, numero, label, porcentaje) {
-    return '<div class="stat-card">' +
-      '<div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
-      '<div style="min-width:0;flex:1"><div class="stat-num">' + numero + '</div>' +
-      '<div class="stat-label">' + App.h(label) + '</div>' +
-      (porcentaje === undefined || isNaN(porcentaje)
-        ? ''
-        : '<div class="kpi-barra ' + clase + '"><span style="width:' + Math.max(0, Math.min(100, porcentaje)) + '%"></span></div>') +
-      '</div></div>';
-  }
+  // V3.5: kpi consolidado en App.kpi (14/15/29/18 usaban copias locales).
 
   function render(d) {
     cont.innerHTML = '';
@@ -60,14 +51,14 @@ var DashboardModule = (function () {
     kpis.className = 'rejilla-kpi';
     var invTotal = (inv.disponible || 0) + (inv.entregado || 0) + (inv.danado || 0) + (inv.extraviado || 0) + (inv.baja || 0) + (inv.sinEstado || 0);
     kpis.innerHTML =
-      kpi('voluntarios', 'verde', v.activos || 0, 'Voluntarios activos', pct(v.activos, v.total)) +
-      kpi('voluntarios', 'azul', v.total || 0, 'Voluntarios registrados') +
-      kpi('servicios', 'celeste', srv.activos || 0, 'Servicios activos', pct(srv.activos, srv.total)) +
-      kpi('asistencia', 'verde', asi.porcentajePresencia !== undefined ? asi.porcentajePresencia + '%' : '—', 'Presencia en asistencia', asi.porcentajePresencia) +
-      kpi('catalogo', 'azul', cat.activos || 0, 'Elementos catalogados', pct(cat.activos, cat.total)) +
-      kpi('inventario', 'verde', inv.disponible || 0, 'Stock disponible', pct(inv.disponible, invTotal)) +
-      kpi('devolver', 'ambar', ent.pendientes || 0, 'Pendientes de devolución', pct(ent.pendientes, ent.total)) +
-      kpi('alerta', crit > 0 ? 'rojo' : 'gris', alertas.length, 'Alertas', alertas.length ? 100 : 0);
+      App.kpi('voluntarios', 'verde', v.activos || 0, 'Voluntarios activos', pct(v.activos, v.total)) +
+      App.kpi('voluntarios', 'azul', v.total || 0, 'Voluntarios registrados') +
+      App.kpi('servicios', 'celeste', srv.activos || 0, 'Servicios activos', pct(srv.activos, srv.total)) +
+      App.kpi('asistencia', 'verde', asi.porcentajePresencia !== undefined ? asi.porcentajePresencia + '%' : '—', 'Presencia en asistencia', asi.porcentajePresencia) +
+      App.kpi('catalogo', 'azul', cat.activos || 0, 'Elementos catalogados', pct(cat.activos, cat.total)) +
+      App.kpi('inventario', 'verde', inv.disponible || 0, 'Stock disponible', pct(inv.disponible, invTotal)) +
+      App.kpi('devolver', 'ambar', ent.pendientes || 0, 'Pendientes de devolución', pct(ent.pendientes, ent.total)) +
+      App.kpi('alerta', crit > 0 ? 'rojo' : 'gris', alertas.length, 'Alertas', alertas.length ? 100 : 0);
     cont.appendChild(kpis);
 
     /* Fila: alertas + actividad */
@@ -84,7 +75,7 @@ var DashboardModule = (function () {
     } else {
       var htmlA = '';
       for (var i = 0; i < alertas.length; i++) {
-        htmlA += '<div style="margin-bottom:8px">' +
+        htmlA += '<div class="mb-2">' +
           App.alerta(alertas[i].severidad === 'critica' ? 'critica' : 'aviso', App.h(alertas[i].texto)) + '</div>';
       }
       cuerpoAlertas.innerHTML = htmlA;
@@ -112,35 +103,28 @@ var DashboardModule = (function () {
     }
     cardAct.querySelector('#dash-ver-historial').addEventListener('click', function () { App.navegar('historial'); });
 
-    /* Accesos rápidos */
+    /* Tareas rápidas (V3.5: sin duplicar los CTAs de la cabecera) */
     var acc = document.createElement('div');
-    acc.className = 'card';
-    acc.style.marginTop = 'var(--esp-5)';
-    acc.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Accesos rápidos</h2></div>' +
+    acc.className = 'card mt-5';
+    acc.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Tareas rápidas</h2></div>' +
       '<div class="card-cuerpo fila" style="gap:var(--esp-3)">' +
-      '<button class="btn btn-secundario" id="dash-ac-nuevo">' + App.icono('voluntarios') + 'Registrar voluntario</button>' +
-      '<button class="btn btn-secundario" id="dash-ac-entrada">' + App.icono('inventario') + 'Registrar entrada</button>' +
-      '<button class="btn btn-secundario" id="dash-ac-entrega">' + App.icono('entregas') + 'Registrar entrega</button>' +
-      '<button class="btn btn-secundario" id="dash-ac-inventario">' + App.icono('paquete') + 'Ver inventario</button>' +
+      '<button class="btn btn-secundario tarea-rapida" id="dash-ac-entrega">' + App.icono('entregas') + 'Registrar entrega</button>' +
+      '<button class="btn btn-secundario tarea-rapida" id="dash-ac-inventario">' + App.icono('paquete') + 'Ver inventario</button>' +
       '</div>';
     cont.appendChild(acc);
-    acc.querySelector('#dash-ac-nuevo').addEventListener('click', abrirNuevoVoluntario);
-    acc.querySelector('#dash-ac-entrada').addEventListener('click', abrirEntradaInventario);
     acc.querySelector('#dash-ac-entrega').addEventListener('click', function () { App.navegar('entregas'); });
     acc.querySelector('#dash-ac-inventario').addEventListener('click', function () { App.navegar('inventario'); });
 
     /* Gráficos */
     var graficos = document.createElement('div');
-    graficos.className = 'rejilla-2';
-    graficos.style.marginTop = 'var(--esp-5)';
+    graficos.className = 'rejilla-2 mt-5';
     graficos.innerHTML = '<div class="card" id="dash-g-vol"></div><div class="card" id="dash-g-cat"></div>';
     cont.appendChild(graficos);
     graficos.querySelector('#dash-g-vol').innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Voluntarios por estado</h2></div><div class="card-cuerpo" id="dash-vol-cuerpo"></div>';
     graficos.querySelector('#dash-g-cat').innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Voluntarios por categoría</h2></div><div class="card-cuerpo" id="dash-cat-cuerpo"></div>';
 
     var apiladas = document.createElement('div');
-    apiladas.className = 'card';
-    apiladas.style.marginTop = 'var(--esp-5)';
+    apiladas.className = 'card mt-5';
     apiladas.innerHTML = '<div class="card-cabecera"><h2 class="card-titulo">Distribución del inventario por estado</h2></div>' +
       '<div class="card-cuerpo" id="dash-inv-cuerpo"></div>';
     cont.appendChild(apiladas);
@@ -248,11 +232,21 @@ var DashboardModule = (function () {
       m.overlay.querySelector('[data-cerrar-nv]').addEventListener('click', m.cerrar);
       document.getElementById('nv-guardar').addEventListener('click', function () {
         var btn = document.getElementById('nv-guardar');
+        // V3.5: validación inline (antes solo toast global)
+        App.formLimpiar(m.overlay);
+        var run = document.getElementById('nv-run').value.trim();
+        var nombres = document.getElementById('nv-nombres').value.trim();
+        var paterno = document.getElementById('nv-paterno').value.trim();
+        var invalido = false;
+        if (!run) { App.formError(document.getElementById('nv-run'), 'Ingresa el RUN.'); invalido = true; }
+        if (!nombres) { App.formError(document.getElementById('nv-nombres'), 'Ingresa los nombres.'); invalido = true; }
+        if (!paterno) { App.formError(document.getElementById('nv-paterno'), 'Ingresa el apellido paterno.'); invalido = true; }
+        if (invalido) return;
         App.botonEstado(btn, 'procesando', 'Registrando…');
         App.pedir('crearPersonaV2', [{
-          run: document.getElementById('nv-run').value.trim(),
-          nombres: document.getElementById('nv-nombres').value.trim(),
-          apPaterno: document.getElementById('nv-paterno').value.trim(),
+          run: run,
+          nombres: nombres,
+          apPaterno: paterno,
           apMaterno: document.getElementById('nv-materno').value.trim(),
           categoria: document.getElementById('nv-categoria').value,
           voluntario: true

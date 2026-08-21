@@ -11,14 +11,15 @@ var UsuariosModule = (function () {
   var pestaña = 'usuarios';
 
   function cargar() {
-    App.pedir('listarPerfilesV2').then(function (res) { perfiles = (res || []).map(function (p) { return p.nombre; }); })
-      .catch(function () { perfiles = []; })
-      .then(function () { return App.pedir('listarUsuariosV2'); })
-      .then(function (res) { usuarios = res || []; })
-      .catch(function () { usuarios = []; })
-      .then(function () { return App.pedir('listarPermisosV2'); })
-      .then(function (res) { permisos = res || []; render(); })
-      .catch(function () { permisos = []; render(); });
+    // V3.5 (PERF): 3 llamadas secuenciales → una sola en paralelo.
+    Promise.all([
+      App.pedir('listarPerfilesV2').then(function (res) { perfiles = (res || []).map(function (p) { return p.nombre; }); })
+        .catch(function () { perfiles = []; }),
+      App.pedir('listarUsuariosV2').then(function (res) { usuarios = res || []; })
+        .catch(function () { usuarios = []; }),
+      App.pedir('listarPermisosV2').then(function (res) { permisos = res || []; })
+        .catch(function () { permisos = []; })
+    ]).then(function () { render(); });
   }
 
   function render() {
@@ -32,15 +33,21 @@ var UsuariosModule = (function () {
 
     var tabs = document.createElement('div');
     tabs.className = 'tabs';
+    tabs.setAttribute('role', 'tablist');
     tabs.innerHTML =
-      '<button class="tab" data-tab="usuarios">Usuarios (' + usuarios.length + ')</button>' +
-      '<button class="tab" data-tab="permisos">Excepciones de permisos (' + permisos.length + ')</button>';
+      '<button class="tab" data-tab="usuarios" role="tab" aria-selected="true">Usuarios (' + usuarios.length + ')</button>' +
+      '<button class="tab" data-tab="permisos" role="tab" aria-selected="false">Excepciones de permisos (' + permisos.length + ')</button>';
     cont.appendChild(tabs);
     tabs.querySelectorAll('.tab').forEach(function (b) {
       b.addEventListener('click', function () {
         pestaña = b.getAttribute('data-tab');
-        tabs.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('activa'); });
-        b.classList.add('activa');
+        // V3.5: clase correcta 'activo' (antes 'activa' — el estilo nunca aplicaba)
+        tabs.querySelectorAll('.tab').forEach(function (x) {
+          x.classList.remove('activo');
+          x.setAttribute('aria-selected', 'false');
+        });
+        b.classList.add('activo');
+        b.setAttribute('aria-selected', 'true');
         pintar();
       });
     });
@@ -59,13 +66,14 @@ var UsuariosModule = (function () {
         '<div class="card-cabecera"><strong>Usuarios</strong>' +
         '<button class="btn btn-primario" id="us-nuevo">' + App.icono('mas') + 'Nuevo usuario</button></div>' +
         '<div class="card-cuerpo sin-pad">' +
-        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Correo</th><th>Perfil</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
-        usuarios.map(function (u) {
-          return '<tr><td class="fuerte">' + App.h(u.correo) + '</td>' +
-            '<td>' + App.h(u.perfil) + '</td>' +
-            '<td>' + App.badge(u.activo ? 'Activo' : 'Inactivo', u.activo ? 'ok' : 'gris') + '</td>' +
-            '<td><div class="acciones"><button class="btn-icono" data-us-edit="' + App.h(u.id) + '" title="Editar" aria-label="Editar">' + App.icono('editar') + '</button></div></td></tr>';
-        }).join('') +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Correo</th><th>Perfil</th><th>Estado</th><th class="texto-der">Acciones</th></tr></thead><tbody>' +
+        (usuarios.length ? usuarios.map(function (u) {
+          return '<tr><td class="fuerte" data-label="Correo">' + App.h(u.correo) + '</td>' +
+            '<td data-label="Perfil">' + App.h(u.perfil) + '</td>' +
+            '<td data-label="Estado">' + App.badge(u.activo ? 'Activo' : 'Inactivo', u.activo ? 'ok' : 'gris') + '</td>' +
+            '<td data-label="Acciones"><div class="acciones"><button class="btn-icono" data-us-edit="' + App.h(u.id) + '" title="Editar" aria-label="Editar">' + App.icono('editar') + '</button></div></td></tr>';
+        }).join('') :
+          '<tr><td colspan="4" class="texto-centro texto-dim">Sin usuarios registrados.</td></tr>') +
         '</tbody></table></div></div>';
       document.getElementById('us-nuevo').addEventListener('click', formUsuario(null));
       card.querySelectorAll('[data-us-edit]').forEach(function (b) {
@@ -81,17 +89,18 @@ var UsuariosModule = (function () {
       '<div class="card-cabecera"><strong>Excepciones de permisos</strong>' +
       '<button class="btn btn-primario" id="us-perm-nuevo">' + App.icono('mas') + 'Nueva excepción</button></div>' +
       '<div class="card-cuerpo sin-pad">' +
-      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Perfil</th><th>Módulo</th><th>Acción</th><th>Efecto</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
-      permisos.map(function (p) {
-        return '<tr><td class="fuerte">' + App.h(p.perfil) + '</td>' +
-          '<td>' + App.h(p.modulo) + '</td>' +
-          '<td>' + App.h(p.accion) + '</td>' +
-          '<td>' + (p.activo ? App.badge('Otorga', 'ok') : App.badge('Revoca', 'rojo')) + '</td>' +
-          '<td><div class="acciones">' +
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Perfil</th><th>Módulo</th><th>Acción</th><th>Efecto</th><th class="texto-der">Acciones</th></tr></thead><tbody>' +
+      (permisos.length ? permisos.map(function (p) {
+        return '<tr><td class="fuerte" data-label="Perfil">' + App.h(p.perfil) + '</td>' +
+          '<td data-label="Módulo">' + App.h(p.modulo) + '</td>' +
+          '<td data-label="Acción">' + App.h(p.accion) + '</td>' +
+          '<td data-label="Efecto">' + (p.activo ? App.badge('Otorga', 'ok') : App.badge('Revoca', 'rojo')) + '</td>' +
+          '<td data-label="Acciones"><div class="acciones">' +
           '<button class="btn-icono" data-perm-toggle="' + App.h(p.id) + '" title="Cambiar efecto" aria-label="Cambiar efecto">' + App.icono('editar') + '</button>' +
           '<button class="btn-icono btn-icono-rojo" data-perm-del="' + App.h(p.id) + '" title="Revocar" aria-label="Revocar">' + App.icono('x') + '</button>' +
           '</div></td></tr>';
-      }).join('') +
+      }).join('') :
+        '<tr><td colspan="5" class="texto-centro texto-dim">Sin excepciones de permisos.</td></tr>') +
       '</tbody></table></div></div>';
     document.getElementById('us-perm-nuevo').addEventListener('click', formPermiso);
     card.querySelectorAll('[data-perm-toggle]').forEach(function (b) {

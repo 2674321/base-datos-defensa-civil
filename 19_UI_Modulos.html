@@ -159,8 +159,8 @@ var ServiciosModule = (function () {
           '<div class="stat-card"><span class="stat-ico">' + App.icono('servicios') + '</span><div><strong>' + App.h(s.tipo || '—') + '</strong><span class="stat-titulo">' + App.h(s.nombre || 'Sin nombre') + ' · ' + App.h(s.fecha || '—') + '</span></div></div>' +
           '<div class="stat-card"><span class="stat-ico">' + App.icono('voluntarios') + '</span><div><strong>' + (s.responsableId ? 'Resp. N° ' + App.h(s.responsableId) : 'Sin responsable') + '</strong><span class="stat-titulo">' + App.h(s.lugar || '') + (s.comuna ? ' · ' + App.h(s.comuna) : '') + '</span></div></div>' +
           '</div>' +
-          (s.descripcion ? '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cuerpo">' + App.h(s.descripcion) + '</div></div>' : '') +
-          '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cabecera"><strong>Asignados (' + (d.asignados || []).length + ')</strong>' +
+          (s.descripcion ? '<div class="card mt-3"><div class="card-cuerpo">' + App.h(s.descripcion) + '</div></div>' : '') +
+          '<div class="card mt-3"><div class="card-cabecera"><strong>Asignados (' + (d.asignados || []).length + ')</strong>' +
           '<button class="btn btn-primario" id="serv-asignar">' + App.icono('mas') + 'Asignar voluntarios</button></div>' +
           '<div class="card-cuerpo sin-pad" id="serv-asignados"></div></div>',
         acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cerrar</button>' +
@@ -174,12 +174,26 @@ var ServiciosModule = (function () {
       m.overlay.querySelectorAll('[data-estado]').forEach(function (b) {
         b.addEventListener('click', function () {
           if (b.disabled) return;
-          App.pedir('cambiarEstadoServicioV2', [s.id, b.getAttribute('data-estado')]).then(function () {
-            App.toast('Estado actualizado a ' + b.getAttribute('data-estado'), 'ok');
-            App.trasCambio();
-            m.cerrar();
-            cargar();
-          }).catch(function (err) { App.toast(err.message || 'No se pudo cambiar el estado', 'error'); });
+          var nuevo = b.getAttribute('data-estado');
+          // V3.5: cancelar es una acción destructiva — requiere confirmación.
+          var aplicar = function () {
+            App.pedir('cambiarEstadoServicioV2', [s.id, nuevo]).then(function () {
+              App.toast('Estado actualizado a ' + nuevo, 'ok');
+              App.trasCambio();
+              m.cerrar();
+              cargar();
+            }).catch(function (err) { App.toast(err.message || 'No se pudo cambiar el estado', 'error'); });
+          };
+          if (nuevo === 'Cancelado') {
+            App.confirmar({
+              titulo: 'Cancelar servicio',
+              mensaje: '¿Cancelar el servicio "' + App.h(s.nombre || s.id) + '"? Los marcajes de asistencia se conservan.',
+              confirmar: 'Cancelar servicio',
+              tipo: 'peligro'
+            }).then(function (si) { if (si) aplicar(); });
+          } else {
+            aplicar();
+          }
         });
       });
     }).catch(function (err) {
@@ -207,9 +221,9 @@ var ServiciosModule = (function () {
         titulo: 'Asignar voluntarios',
         ancho: 'ancho',
         cuerpo: '<div class="campo"><label for="serv-rol">Rol en servicio (todos)</label><input class="input" id="serv-rol" placeholder="Ej.: Apoyo logístico"></div>' +
-          '<div id="serv-checks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--esp-2)">' +
+          '<div id="serv-checks" class="grid-checks">' +
           candidatos.map(function (p) {
-            return '<label style="display:flex;gap:var(--esp-2);align-items:center"><input type="checkbox" value="' + App.h(p.voluntarioId) + '"> ' + App.h(p.nombreCompleto) + ' <span class="texto-dim">(' + App.h(p.grado || '') + ')</span></label>';
+            return '<label><input type="checkbox" value="' + App.h(p.voluntarioId) + '"> ' + App.h(p.nombreCompleto) + ' <span class="texto-dim">(' + App.h(p.grado || '') + ')</span></label>';
           }).join('') + '</div>',
         acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cancelar</button>' +
           '<button class="btn btn-primario" id="serv-asignar-guardar">' + App.icono('check') + 'Asignar seleccionados</button>'
@@ -313,9 +327,9 @@ var AsistenciaModule = (function () {
 
     var html = resumenHtml;
     if (!d.registros.length) {
-      html += '<div style="margin-top:var(--esp-3)">' + App.alerta('info', '<strong>Sin marcajes aún.</strong> Asigna voluntarios al servicio (página Servicios) y regístralos aquí.') + '</div>';
+      html += '<div class="mt-3">' + App.alerta('info', '<strong>Sin marcajes aún.</strong> Asigna voluntarios al servicio (página Servicios) y regístralos aquí.') + '</div>';
     } else {
-      html += '<div class="tabla-wrap" style="margin-top:var(--esp-3)"><table class="tabla"><thead><tr>' +
+      html += '<div class="tabla-wrap mt-3"><table class="tabla"><thead><tr>' +
         '<th>Voluntario</th><th>Tipo</th><th>Estado</th><th>Horas</th><th>Motivo</th></tr></thead><tbody>';
       for (var i = 0; i < d.registros.length; i++) {
         var x = d.registros[i];
@@ -329,9 +343,13 @@ var AsistenciaModule = (function () {
     }
     cuerpo.innerHTML = html;
 
+    // V3.5 (FIX ACUMULACIÓN): cada guardado re-ejecutaba pintarMarcaje y
+    // agregaba OTRA card de marcaje — la anterior se elimina explícitamente.
+    var cardPrevia = document.getElementById('as-marcaje-card');
+    if (cardPrevia) cardPrevia.remove();
     var cuerpoMarcaje = document.createElement('div');
-    cuerpoMarcaje.className = 'card';
-    cuerpoMarcaje.style.marginTop = 'var(--esp-3)';
+    cuerpoMarcaje.id = 'as-marcaje-card';
+    cuerpoMarcaje.className = 'card mt-3';
     cuerpoMarcaje.innerHTML =
       '<div class="card-cabecera"><strong>Marcar asistencia</strong>' +
       '<button class="btn btn-primario" id="as-guardar">' + App.icono('check') + 'Guardar marcajes</button></div>' +
@@ -352,9 +370,9 @@ var AsistenciaModule = (function () {
         filas.map(function (f) {
           return '<tr>' +
             '<td class="fuerte">' + App.h(f.voluntario) + '</td>' +
-            '<td><select class="select as-tipo" style="width:auto">' + optTipos.replace(new RegExp('>' + App.h(f.tipoAsistencia) + '<'), ' selected>' + App.h(f.tipoAsistencia) + '<') + '</select></td>' +
-            '<td><select class="select as-estado" style="width:auto">' + optEstados.replace(new RegExp('>' + App.h(f.estado) + '<'), ' selected>' + App.h(f.estado) + '<') + '</select></td>' +
-            '<td><input class="input as-horas" type="number" min="0" step="0.5" value="' + (f.horas || 0) + '" style="width:70px"></td>' +
+            '<td><select class="select ancho-auto as-tipo">' + optTipos.replace(new RegExp('>' + App.h(f.tipoAsistencia) + '<'), ' selected>' + App.h(f.tipoAsistencia) + '<') + '</select></td>' +
+            '<td><select class="select ancho-auto as-estado">' + optEstados.replace(new RegExp('>' + App.h(f.estado) + '<'), ' selected>' + App.h(f.estado) + '<') + '</select></td>' +
+            '<td><input class="input input-num as-horas" type="number" min="0" step="0.5" value="' + (f.horas || 0) + '"></td>' +
             '<td><input class="input as-motivo" placeholder="Opcional" value="' + App.h(f.motivo || '') + '"></td></tr>';
         }).join('') + '</tbody></table></div>';
       marcajes = filas;
@@ -400,8 +418,7 @@ var AsistenciaModule = (function () {
   function cargarEstadisticas() {
     App.pedir('obtenerEstadisticasAsistenciaV2', [{}]).then(function (d) {
       var card = document.createElement('div');
-      card.className = 'card';
-      card.style.marginTop = 'var(--esp-3)';
+      card.className = 'card mt-3';
       card.innerHTML = '<div class="card-cabecera"><strong>Estadísticas ' + d.anio + '</strong>' +
         '<span class="texto-dim">' + (d.resumen.total ? d.resumen.total + ' marcaje(s) · ' + d.porcentajePresencia + '% presencia' : 'Sin marcajes este año') + '</span></div>' +
         (d.resumen.total ?
@@ -410,7 +427,7 @@ var AsistenciaModule = (function () {
           '<div class="stat-card"><span class="stat-ico ok">' + App.icono('check') + '</span><div><strong>' + d.resumen.presentes + '</strong><span class="stat-titulo">Presentes ' + d.anio + '</span></div></div>' +
           '<div class="stat-card"><span class="stat-ico aviso">' + App.icono('alerta') + '</span><div><strong>' + d.resumen.ausentes + '</strong><span class="stat-titulo">Ausentes ' + d.anio + '</span></div></div>' +
           '</div>' +
-          '<div class="alerta alerta-info" role="status" style="margin-top:var(--esp-3)">' + App.icono('alerta') +
+          '<div class="alerta alerta-info" role="status" class="mt-3">' + App.icono('alerta') +
           '<div><strong>Mínimos de referencia (ROF-S Art. 18) — el sistema informa, no sanciona:</strong><br>' +
           'Voluntarios: ' + d.minimosReferencia.voluntariosRegimen + '% régimen · ' + d.minimosReferencia.voluntariosOperativa + '% operativa — ' +
           'Disponibles: ' + d.minimosReferencia.disponiblesRegimen + '% régimen · ' + d.minimosReferencia.disponiblesOperativa + '% operativa</div></div>' +
@@ -512,12 +529,12 @@ var HistorialModule = (function () {
     var card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-cabecera" style="flex-wrap:wrap">' +
-      '<div class="buscador" style="flex:1;min-width:180px;max-width:300px">' + App.icono('buscar') +
+      '<div class="card-cabecera fila-filtros">' +
+      '<div class="buscador buscador-medio">' + App.icono('buscar') +
       '<input class="input" id="hist-buscar" placeholder="Buscar en el historial…" aria-label="Buscar en historial"></div>' +
-      '<select class="select" id="hist-filtro-tipo" style="width:auto" aria-label="Filtrar por tipo">' +
+      '<select class="select ancho-auto" id="hist-filtro-tipo" aria-label="Filtrar por tipo">' +
       '<option value="">Todos los tipos</option>' + optTipos + '</select>' +
-      '<select class="select" id="hist-filtro-resultado" style="width:auto" aria-label="Filtrar por resultado">' +
+      '<select class="select ancho-auto" id="hist-filtro-resultado" aria-label="Filtrar por resultado">' +
       '<option value="">Todos los resultados</option><option value="ok">Correctos</option><option value="error">Con error</option>' +
       '</select></div>' +
       '<div class="card-cuerpo" id="hist-cuerpo"></div>';

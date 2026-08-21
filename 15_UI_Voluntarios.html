@@ -21,12 +21,7 @@ var VoluntariosModule = (function () {
   var pagina = 1;
   var POR_PAGINA = 15;
 
-  function kpi(iconoNombre, clase, numero, label) {
-    return '<div class="stat-card">' +
-      '<div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
-      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
-      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
-  }
+  // V3.5: kpi consolidado en App.kpi (14/15/29/18 usaban copias locales).
 
   function cargarListas() {
     return App.memo('config', 60000, function () { return App.pedir('obtenerConfiguracion'); })
@@ -64,31 +59,31 @@ var VoluntariosModule = (function () {
     var kpiVol = document.createElement('div');
     kpiVol.className = 'rejilla-kpi';
     kpiVol.innerHTML =
-      kpi('voluntarios', 'verde', activos, 'Activos') +
-      kpi('voluntarios', 'gris', egresados, 'Egresados') +
-      kpi('voluntarios', 'celeste', otros, 'Inactivos / suspendidos') +
-      kpi('voluntarios', 'azul', total, 'Total registrados');
+      App.kpi('voluntarios', 'verde', activos, 'Activos') +
+      App.kpi('voluntarios', 'gris', egresados, 'Egresados') +
+      App.kpi('voluntarios', 'celeste', otros, 'Inactivos / suspendidos') +
+      App.kpi('voluntarios', 'azul', total, 'Total registrados');
     cont.appendChild(kpiVol);
 
     var card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-cabecera">' +
-      '<div class="buscador" style="flex:1;min-width:200px;max-width:340px">' + App.icono('buscar') +
+      '<div class="card-cabecera fila-filtros">' +
+      '<div class="buscador buscador-ancho">' + App.icono('buscar') +
       '<input class="input" id="vol-buscar" placeholder="Buscar por nombre, RUN o N°…" aria-label="Buscar voluntario"></div>' +
-      '<select class="select" id="vol-filtro-estado" style="width:auto" aria-label="Filtrar por estado">' +
+      '<select class="select ancho-auto" id="vol-filtro-estado" aria-label="Filtrar por estado">' +
       '<option value="">Todos los estados</option>' +
       estados.map(function (e) { return '<option value="' + App.h(e) + '">' + App.h(e) + '</option>'; }).join('') + '</select>' +
-      '<select class="select" id="vol-filtro-categoria" style="width:auto" aria-label="Filtrar por categoría">' +
+      '<select class="select ancho-auto" id="vol-filtro-categoria" aria-label="Filtrar por categoría">' +
       '<option value="">Todas las categorías</option>' +
       categorias.map(function (c) { return '<option value="' + App.h(c) + '">' + App.h(c) + '</option>'; }).join('') + '</select>' +
-      '<select class="select" id="vol-filtro-especialidad" style="width:auto" aria-label="Filtrar por especialidad">' +
+      '<select class="select ancho-auto" id="vol-filtro-especialidad" aria-label="Filtrar por especialidad">' +
       '<option value="">Todas las especialidades</option>' +
       opcionesEsp().map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('') + '</select>' +
-      '<select class="select" id="vol-filtro-subesp" style="width:auto" aria-label="Filtrar por subespecialidad">' +
+      '<select class="select ancho-auto" id="vol-filtro-subesp" aria-label="Filtrar por subespecialidad">' +
       '<option value="">Todas las subespecialidades</option>' +
       opcionesSub().map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('') + '</select>' +
-      '<select class="select" id="vol-filtro-unidad" style="width:auto" aria-label="Filtrar por unidad">' +
+      '<select class="select ancho-auto" id="vol-filtro-unidad" aria-label="Filtrar por unidad">' +
       '<option value="">Todas las unidades</option>' +
       opcionesUnidad().map(function (n) { return '<option value="' + App.h(n) + '">' + App.h(n) + '</option>'; }).join('') + '</select>' +
       '</div>' +
@@ -234,19 +229,19 @@ var VoluntariosModule = (function () {
     };
     var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
       th('voluntarioId', 'N°') + th('nombreCompleto', 'Voluntario') + th('run', 'RUN') + th('grado', 'Grado') +
-      th('cargo', 'Cargo') + th('categoria', 'Categoría') + th('estado', 'Estado') + '<th style="text-align:right">Acciones</th></tr></thead><tbody>';
+      th('cargo', 'Cargo') + th('categoria', 'Categoría') + th('estado', 'Estado') + '<th class="texto-der">Acciones</th></tr></thead><tbody>';
 
     for (var i = 0; i < visibles.length; i++) {
       var v = visibles[i];
       html += '<tr>' +
-        '<td class="fuerte num">' + v.voluntarioId + '</td>' +
-        '<td class="fuerte">' + App.h(v.nombreCompleto) + '</td>' +
-        '<td class="num">' + App.h(v.run) + '</td>' +
-        '<td>' + App.h(v.grado || '—') + '</td>' +
-        '<td>' + App.h(v.cargo || '—') + '</td>' +
-        '<td>' + App.h(v.categoria || '—') + '</td>' +
-        '<td>' + App.estadoVoluntario(v.estado) + '</td>' +
-        '<td><div class="acciones">' +
+        '<td class="fuerte num" data-label="N°">' + v.voluntarioId + '</td>' +
+        '<td class="fuerte" data-label="Voluntario">' + App.h(v.nombreCompleto) + '</td>' +
+        '<td class="num" data-label="RUN">' + App.h(v.run) + '</td>' +
+        '<td data-label="Grado">' + App.h(v.grado || '—') + '</td>' +
+        '<td data-label="Cargo">' + App.h(v.cargo || '—') + '</td>' +
+        '<td data-label="Categoría">' + App.h(v.categoria || '—') + '</td>' +
+        '<td data-label="Estado">' + App.estadoVoluntario(v.estado) + '</td>' +
+        '<td data-label="Acciones"><div class="acciones">' +
         '<button class="btn-icono" data-ficha="' + v.voluntarioId + '" title="Ver ficha" aria-label="Ver ficha de ' + App.h(v.nombreCompleto) + '">' + App.icono('usuario') + '</button>' +
         (v.estado !== 'Egresado' ?
           '<button class="btn-icono rojo" data-baja="' + v.voluntarioId + '" title="Dar de baja" aria-label="Dar de baja a ' + App.h(v.nombreCompleto) + '">' + App.icono('x') + '</button>' :
@@ -291,11 +286,21 @@ var VoluntariosModule = (function () {
     m.overlay.querySelector('[data-cerrar-nv]').addEventListener('click', m.cerrar);
     document.getElementById('nv-guardar').addEventListener('click', function () {
       var btn = document.getElementById('nv-guardar');
+      // V3.5: validación inline (antes solo toast global)
+      App.formLimpiar(m.overlay);
+      var run = document.getElementById('nv-run').value.trim();
+      var nombres = document.getElementById('nv-nombres').value.trim();
+      var paterno = document.getElementById('nv-paterno').value.trim();
+      var invalido = false;
+      if (!run) { App.formError(document.getElementById('nv-run'), 'Ingresa el RUN.'); invalido = true; }
+      if (!nombres) { App.formError(document.getElementById('nv-nombres'), 'Ingresa los nombres.'); invalido = true; }
+      if (!paterno) { App.formError(document.getElementById('nv-paterno'), 'Ingresa el apellido paterno.'); invalido = true; }
+      if (invalido) return;
       App.botonEstado(btn, 'procesando', 'Registrando…');
       App.pedir('crearPersonaV2', [{
-        run: document.getElementById('nv-run').value.trim(),
-        nombres: document.getElementById('nv-nombres').value.trim(),
-        apPaterno: document.getElementById('nv-paterno').value.trim(),
+        run: run,
+        nombres: nombres,
+        apPaterno: paterno,
         apMaterno: document.getElementById('nv-materno').value.trim(),
         categoria: document.getElementById('nv-categoria').value,
         voluntario: true

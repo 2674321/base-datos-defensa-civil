@@ -12,7 +12,7 @@ var App = (function () {
   var sesion = null;
   var PAGINAS = {};
   var cache = {};
-  var PROYECTO_VERSION = '0.8.9';
+  var PROYECTO_VERSION = '0.9.0';
   var ultimoTotalAlertas = null;
   var _barraCarga = null;
   var _barraDesde = 0;
@@ -40,6 +40,8 @@ var App = (function () {
     usuarios: 'Usuarios',
     biblioteca: 'Biblioteca Institucional'
   };
+  /* V3.5: ruta padre para páginas hijas (breadcrumb "Padre · Actual") */
+  var TITULOS_PADRE = { ficha: 'Voluntarios' };
 
   /* ---- API backend: promesa sobre google.script.run ---- */
 
@@ -301,7 +303,14 @@ var App = (function () {
     setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 320);
   }
 
+  var TIPOS_BADGE = ['ok', 'info', 'info2', 'aviso', 'peligro', 'gris', 'neutro'];
+
   function badge(texto, tipo) {
+    // V3.5: robustez — si la firma llegó invertida (texto=tipo, tipo=texto),
+    // se detecta y corrige automáticamente (bug real en 18_UI_Ficha).
+    if (TIPOS_BADGE.indexOf(tipo) === -1 && TIPOS_BADGE.indexOf(texto) !== -1) {
+      var tmp = texto; texto = tipo; tipo = tmp;
+    }
     var ico = { 'ok': 'check', 'aviso': 'alerta', 'peligro': 'alerta' }[tipo] || 'punto';
     return '<span class="badge badge-' + h(tipo) + '">' + icono(ico) + h(texto) + '</span>';
   }
@@ -317,6 +326,91 @@ var App = (function () {
   function alerta(tipo, html) {
     var ico = tipo === 'critica' ? 'alerta' : (tipo === 'aviso' ? 'alerta' : 'check');
     return '<div class="alerta alerta-' + h(tipo) + '" role="status">' + icono(ico) + '<div>' + html + '</div></div>';
+  }
+
+  /* ---- V3.5: helpers consolidados (kpi/tabs/formError) ---- */
+
+  // KPI único (reemplaza kpi() de 14/15/29 y kpiHtml de 18) — misma marca que
+  // el Dashboard V3.4K (barras proporcionales opcionales por porcentaje).
+  function kpi(iconoNombre, clase, numero, label, porcentaje) {
+    return '<div class="stat-card">' +
+      '<div class="stat-ico ' + clase + '">' + icono(iconoNombre) + '</div>' +
+      '<div style="min-width:0;flex:1"><div class="stat-num">' + numero + '</div>' +
+      '<div class="stat-label">' + h(label) + '</div>' +
+      (porcentaje === undefined || isNaN(porcentaje)
+        ? ''
+        : '<div class="kpi-barra ' + clase + '"><span style="width:' + Math.max(0, Math.min(100, porcentaje)) + '%"></span></div>') +
+      '</div></div>';
+  }
+
+  // Pestañas con semántica ARIA (role=tablist/tab, aria-selected, teclado).
+  // contenedor: elemento donde insertar .tabs · tabs: array de nombres ·
+  // activo: índice inicial · onCambio(indice, nombre): al activar (manual o teclado).
+  function tabs(contenedor, tabsLista, activo, onCambio) {
+    if (!contenedor) return;
+    var bar = document.createElement('div');
+    bar.className = 'tabs';
+    bar.setAttribute('role', 'tablist');
+    var btns = [];
+    for (var i = 0; i < tabsLista.length; i++) {
+      (function (idx) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tab' + (idx === activo ? ' activo' : '');
+        b.setAttribute('role', 'tab');
+        b.setAttribute('id', 'tab-' + idx);
+        b.setAttribute('aria-selected', idx === activo ? 'true' : 'false');
+        b.textContent = tabsLista[idx];
+        b.addEventListener('click', function () {
+          activar(idx);
+        });
+        b.addEventListener('keydown', function (e) {
+          if (e.key === 'ArrowRight') { e.preventDefault(); activar((idx + 1) % tabsLista.length); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); activar((idx - 1 + tabsLista.length) % tabsLista.length); }
+        });
+        btns.push(b);
+        bar.appendChild(b);
+      })(i);
+    }
+    contenedor.innerHTML = '';
+    contenedor.appendChild(bar);
+    var actual = activo;
+    function activar(idx) {
+      if (idx === actual) return;
+      actual = idx;
+      for (var j = 0; j < btns.length; j++) {
+        btns[j].classList.toggle('activo', j === idx);
+        btns[j].setAttribute('aria-selected', j === idx ? 'true' : 'false');
+      }
+      if (onCambio) onCambio(idx, tabsLista[idx]);
+    }
+    return { activar: activar, botones: btns };
+  }
+
+  // Error inline en un campo (clase .campo-error + mensaje bajo el input).
+  // formLimpiar(contenedor) quita errores y marcas de campos de un formulario.
+  function formError(inputEl, mensaje) {
+    if (!inputEl) return;
+    var campo = inputEl.closest('.campo') || inputEl.parentNode;
+    campo.classList.add('campo-error');
+    var viejo = campo.querySelector('.error-texto');
+    if (viejo) viejo.remove();
+    if (mensaje) {
+      var el = document.createElement('div');
+      el.className = 'error-texto';
+      el.setAttribute('role', 'alert');
+      el.innerHTML = icono('alerta') + '<span>' + h(mensaje) + '</span>';
+      campo.appendChild(el);
+    }
+  }
+
+  function formLimpiar(contenedor) {
+    if (!contenedor) return;
+    var errs = contenedor.querySelectorAll('.campo-error, .error-texto');
+    for (var i = 0; i < errs.length; i++) {
+      errs[i].classList.remove('campo-error');
+      if (errs[i].classList.contains('error-texto')) errs[i].remove();
+    }
   }
 
   var TIPOS_VOLUNTARIO = { 'Activo': 'ok', 'Inactivo': 'neutro', 'Suspendido': 'aviso', 'Egresado': 'gris' };
@@ -459,7 +553,14 @@ var App = (function () {
         paginas[j].hidden = !esActiva;
       }
       var titulo = document.getElementById('seccion-actual');
-      if (titulo && TITULOS[nombre]) titulo.textContent = TITULOS[nombre];
+      if (titulo) {
+        var t = TITULOS[nombre];
+        if (t) {
+          // V3.5: breadcrumb de páginas hijas ("Padre · Actual")
+          if (TITULOS_PADRE[nombre]) t = TITULOS_PADRE[nombre] + ' · ' + t;
+          titulo.textContent = t;
+        }
+      }
       var hash = '#/' + nombre + (params && params.id !== undefined && !isNaN(params.id) ? '/' + params.id : '');
       try { history.replaceState(null, '', hash); } catch (err) {}
       var cont = document.getElementById('page-' + nombre);
@@ -731,9 +832,12 @@ var App = (function () {
       var el = document.getElementById('usuario-nombre');
       var avatar = document.getElementById('usuario-avatar');
       var dot = document.getElementById('usuario-dot');
+      var rol = document.getElementById('usuario-rol');
       if (el) el.textContent = s.nombre;
       if (avatar) avatar.textContent = (s.nombre || '?').charAt(0).toUpperCase();
       if (dot) dot.title = s.correo || 'Sesión de Google';
+      // V3.5: rol real desde el backend (antes texto fijo 'Administración')
+      if (rol) rol.textContent = s.perfil || 'Administración';
       if (!s.correo) toast('Sesión anónima: revisa el acceso del deployment', 'aviso');
     }).catch(function () {});
 
@@ -766,6 +870,10 @@ var App = (function () {
     badge: badge,
     empty: empty,
     alerta: alerta,
+    kpi: kpi,
+    tabs: tabs,
+    formError: formError,
+    formLimpiar: formLimpiar,
     estadoVoluntario: estadoVoluntario,
     estadoInventario: estadoInventario,
     estadoEntrega: estadoEntrega,

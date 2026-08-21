@@ -120,7 +120,7 @@ var BibliotecaModule = (function () {
       '<h3 class="page-titulo" style="font-size:1.05rem;margin:0 0 var(--esp-2)">' + App.h(m.nombre || nombre) + '</h3>' +
       '<p class="texto-dim" style="margin:0 0 var(--esp-3)">' + App.h(m.descripcion || 'Sin descripción registrada.') + '</p>' +
       '</div></div>' +
-      '<div class="tabla-wrap" style="margin-top:var(--esp-3)"><table class="tabla"><tbody>' + filas.join('') + '</tbody></table></div>';
+      '<div class="tabla-wrap mt-3"><table class="tabla"><tbody>' + filas.join('') + '</tbody></table></div>';
     App.modal({
       titulo: TIPOS_LABEL[m.tipo] || 'Elemento',
       cuerpo: cuerpo,
@@ -133,13 +133,13 @@ var BibliotecaModule = (function () {
     var card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-cuerpo" style="text-align:center">' +
+      '<div class="card-cuerpo texto-centro">' +
       App.patch(nombre, m.nombre || nombre) +
-      '<div class="fuerte" style="margin-top:var(--esp-2)">' + App.h(m.nombre || nombre) + '</div>' +
-      (m.origen === 'CARGO' ? '<span class="badge badge-aviso" style="margin-top:var(--esp-1)">' + App.icono('alerta') + ' ' + App.h(CARGO_CONDICION) + '</span>' : '') +
-      (m.origen && m.origen !== 'CARGO' ? '<span class="badge badge-' + (ORIGEN_CLASE[m.origen] || 'neutro') + '" style="margin-top:var(--esp-1)">' + App.h(m.origen) + '</span>' : '') +
-      '<div class="texto-dim" style="margin-top:var(--esp-2);font-size:.85rem">' + App.h(m.descripcion || '') + '</div>' +
-      '<div style="margin-top:var(--esp-3)"><button class="btn btn-secundario" data-ficha="' + App.h(nombre) + '">' + App.icono('ver') + ' Ficha</button></div>' +
+      '<div class="fuerte mt-2">' + App.h(m.nombre || nombre) + '</div>' +
+      (m.origen === 'CARGO' ? '<span class="badge badge-aviso mt-2">' + App.icono('alerta') + ' ' + App.h(CARGO_CONDICION) + '</span>' : '') +
+      (m.origen && m.origen !== 'CARGO' ? '<span class="badge mt-2 badge-' + (ORIGEN_CLASE[m.origen] || 'neutro') + '">' + App.h(m.origen) + '</span>' : '') +
+      '<div class="texto-dim mt-2" style="font-size:.85rem">' + App.h(m.descripcion || '') + '</div>' +
+      '<div class="mt-3"><button class="btn btn-secundario" data-ficha="' + App.h(nombre) + '">' + App.icono('ver') + ' Ficha</button></div>' +
       '</div>';
     card.querySelector('[data-ficha]').addEventListener('click', function () {
       fichaElemento(nombre);
@@ -239,9 +239,10 @@ var BibliotecaModule = (function () {
     var filtro = document.createElement('div');
     filtro.className = 'card';
     filtro.innerHTML =
-      '<div class="card-cuerpo" style="display:flex;gap:var(--esp-3);align-items:center;flex-wrap:wrap">' +
-      '<label class="texto-dim" for="bib-buscar" style="flex-shrink:0">Buscar:</label>' +
-      '<input class="entrada" id="bib-buscar" placeholder="Nombre, sección, descripción…" style="flex:1;min-width:220px;max-width:420px"></div>';
+      '<div class="card-cuerpo fila-filtros">' +
+      '<label class="texto-dim" for="bib-buscar">Buscar:</label>' +
+      '<div class="buscador buscador-medio">' + App.icono('buscar') +
+      '<input class="input" id="bib-buscar" placeholder="Nombre, sección, descripción…"></div></div>';
     cont.appendChild(filtro);
 
     var rejilla = document.createElement('div');
@@ -249,10 +250,16 @@ var BibliotecaModule = (function () {
     cont.appendChild(rejilla);
     pintarSecciones(rejilla);
 
+    // V3.5 (PERF): debounce de 150ms — cada tecla reconstruía todas las
+    // secciones con lookups de App.meta.
+    var timer = null;
     var input = document.getElementById('bib-buscar');
     input.addEventListener('input', function () {
-      consulta = input.value.trim().toLowerCase();
-      pintarSecciones(rejilla);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        consulta = input.value.trim().toLowerCase();
+        pintarSecciones(rejilla);
+      }, 150);
     });
   }
 
