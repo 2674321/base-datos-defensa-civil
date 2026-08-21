@@ -26,6 +26,24 @@ Apps Script (backend .gs)  ←→  UI HTML propia (13_*–32_*.html)
 Los archivos están **numerados por capa** (`00_Constantes`, `01_Utilidades`, …,
 `12_WebApp`, `13_*` UI principal, `14_*`–`32_*` páginas hijas).
 
+## Capturas
+
+> Datos ficticios · capturas: agosto 2026 · v0.9.0
+
+![Panel de control](docs/screenshots/dc-panel-control.png)
+*Panel de control · ago 2026 · v0.9*
+
+![Pantalla de carga](docs/screenshots/dc-pantalla-carga.png)
+*Pantalla de carga · ago 2026 · v0.9*
+
+![Ventana LOG](docs/screenshots/dc-ventana-log.png)
+*Ventana de registro LOG · ago 2026 · v0.9*
+
+![Hoja de asistencia](docs/screenshots/dc-hoja-asistencia.png)
+*Hoja de asistencia · ago 2026 · v0.9*
+
+![Biblioteca](docs/screenshots/dc-biblioteca.png)
+*Hoja biblioteca DC · ago 2026 · v0.9*
 ## Desarrollo con clasp
 
 ```bash
