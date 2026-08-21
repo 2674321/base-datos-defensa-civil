@@ -152,6 +152,8 @@ var FichaModule = (function () {
     m.tab = tab;
     cont.querySelectorAll('.tab').forEach(function (t) {
       t.classList.toggle('activo', t.getAttribute('data-tab') === tab);
+      // V3.5: sincronización de aria-selected (role=tab ya existía)
+      t.setAttribute('aria-selected', t.getAttribute('data-tab') === tab ? 'true' : 'false');
     });
     if (tab === 'personal') cuerpoTab(cont).innerHTML = renderPersonal();
     else if (tab === 'admin') cargarTab(cont, 'admin', renderAdmin);
@@ -254,7 +256,7 @@ var FichaModule = (function () {
           if (activa.length || historicas.length) {
             var filasU = activa.concat(historicas).map(function (e) {
               return '<tr><td class="fuerte">' + App.h(e.unidad) + '</td><td>' + App.h(e.rol || '—') + '</td>' +
-                '<td class="num">' + App.h(e.desde || '—') + '</td><td>' + (e.activo ? App.badge('ok', 'Activo') : App.badge('gris', 'Egresado')) + '</td></tr>';
+                '<td class="num">' + App.h(e.desde || '—') + '</td><td>' + (e.activo ? App.badge('Activo', 'ok') : App.badge('Egresado', 'gris')) + '</td></tr>';
             }).join('');
             seccion = '<h3 class="card-titulo" style="margin-top:var(--esp-5)">Unidades</h3>' +
               tabla(['Unidad', 'Rol', 'Desde', 'Estado'], filasU);
@@ -317,7 +319,7 @@ var FichaModule = (function () {
               '<td>' + (subs || '—') + '</td>' +
               '<td>' + App.h(e.nivel || '—') + '</td>' +
               '<td class="num">' + App.h(e.fechaAsignacion || '—') + '</td>' +
-              '<td>' + (e.activo ? App.badge('ok', 'Vigente') : App.badge('gris', 'Cerrada')) + '</td></tr>';
+              '<td>' + (e.activo ? App.badge('Vigente', 'ok') : App.badge('Cerrada', 'gris')) + '</td></tr>';
           }).join('')) :
         App.empty('voluntarios', 'Sin especialidades', 'Este voluntario no tiene especialidades asignadas.');
 
@@ -340,7 +342,7 @@ var FichaModule = (function () {
             return '<tr><td class="fuerte">' + App.h(c.nombre) + '</td>' +
               '<td class="num">' + App.h(c.fecha || '—') + '</td>' +
               '<td class="num">' + App.h(c.fechaVencimiento || '—') + '</td>' +
-              '<td>' + (c.activo ? App.badge('ok', 'Vigente') : App.badge('gris', 'Cerrada')) + '</td></tr>';
+              '<td>' + (c.activo ? App.badge('Vigente', 'ok') : App.badge('Cerrada', 'gris')) + '</td></tr>';
           }).join('')) :
         App.empty('asistencia', 'Sin capacitaciones', 'Este voluntario no tiene capacitaciones registradas.');
 
@@ -412,20 +414,16 @@ var FichaModule = (function () {
       }
       var kpis = Object.keys(tipos).map(function (t) {
         var d = tipos[t];
-        return kpiHtml('asistencia', 'celeste', d.total, t + ' — ' + d.presente + ' presente(s), ' + d.ausente + ' ausente(s)');
+        return App.kpi('asistencia', 'celeste', d.total, t + ' — ' + d.presente + ' presente(s), ' + d.ausente + ' ausente(s)');
       }).join('');
       return '<div class="rejilla-kpi">' +
-        kpiHtml('asistencia', 'verde', r.total, 'Total de marcajes') +
+        App.kpi('asistencia', 'verde', r.total, 'Total de marcajes') +
         kpis +
         '</div>';
     });
   }
 
-  function kpiHtml(iconoNombre, clase, numero, label) {
-    return '<div class="stat-card"><div class="stat-ico ' + clase + '">' + App.icono(iconoNombre) + '</div>' +
-      '<div style="min-width:0"><div class="stat-num">' + numero + '</div>' +
-      '<div class="stat-label">' + App.h(label) + '</div></div></div>';
-  }
+  // V3.5: kpiHtml eliminado — copia local reemplazada por App.kpi (14/15/29/18).
 
   function renderHistorial() {
     return Promise.all([

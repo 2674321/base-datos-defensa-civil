@@ -38,8 +38,8 @@ var CatalogoModule = (function () {
     var card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-cabecera">' +
-      '<div class="buscador" style="width:100%;max-width:320px">' + App.icono('buscar') +
+      '<div class="card-cabecera fila-filtros">' +
+      '<div class="buscador buscador-ancho">' + App.icono('buscar') +
       '<input class="input" id="cat-buscar" placeholder="Buscar por nombre, tipo o ID…" aria-label="Buscar elemento"></div>' +
       '<span class="texto-dim" id="cat-total"></span>' +
       '</div><div class="card-cuerpo sin-pad" id="cat-cuerpo"></div>';
@@ -51,7 +51,9 @@ var CatalogoModule = (function () {
       renderLista();
     }, 250));
 
-    renderLista();
+    // V3.5 (FIX BUG DE MONTAJE): render() no debe pintar el empty state antes
+    // de que cargar() traiga los datos — se muestra skeleton en su lugar.
+    App.skeleton(document.getElementById('cat-cuerpo'), 5);
   }
 
   function renderLista() {
@@ -76,17 +78,17 @@ var CatalogoModule = (function () {
 
     var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
       '<th>ID</th><th>Elemento</th><th>Tipo</th><th>Talla</th><th>Devolución</th><th>Estado</th>' +
-      '<th style="text-align:right">Acciones</th></tr></thead><tbody>';
+      '<th class="texto-der">Acciones</th></tr></thead><tbody>';
     for (var i = 0; i < filtrados.length; i++) {
       var c = filtrados[i];
       html += '<tr>' +
-        '<td class="fuerte num">' + App.h(c.id) + '</td>' +
-        '<td class="fuerte">' + App.h(c.elemento) + '</td>' +
-        '<td>' + App.h(c.tipo || '—') + '</td>' +
-        '<td>' + siNo(c.requiereTalla) + '</td>' +
-        '<td>' + siNo(c.requiereDevolucion) + '</td>' +
-        '<td>' + (c.activo ? App.badge('Activo', 'ok') : App.badge('Inactivo', 'gris')) + '</td>' +
-        '<td><div class="acciones">' +
+        '<td class="fuerte num" data-label="ID">' + App.h(c.id) + '</td>' +
+        '<td class="fuerte" data-label="Elemento">' + App.h(c.elemento) + '</td>' +
+        '<td data-label="Tipo">' + App.h(c.tipo || '—') + '</td>' +
+        '<td data-label="Talla">' + siNo(c.requiereTalla) + '</td>' +
+        '<td data-label="Devolución">' + siNo(c.requiereDevolucion) + '</td>' +
+        '<td data-label="Estado">' + (c.activo ? App.badge('Activo', 'ok') : App.badge('Inactivo', 'gris')) + '</td>' +
+        '<td data-label="Acciones"><div class="acciones">' +
         '<button class="btn-icono" data-editar="' + App.h(c.id) + '" title="Editar" aria-label="Editar ' + App.h(c.elemento) + '">' + App.icono('editar') + '</button>' +
         '<button class="btn-icono ' + (c.activo ? 'rojo' : '') + '" data-alternar="' + App.h(c.id) + '" title="' + (c.activo ? 'Desactivar' : 'Activar') + '" aria-label="' + (c.activo ? 'Desactivar' : 'Activar') + ' ' + App.h(c.elemento) + '">' + (c.activo ? App.icono('x') : App.icono('check')) + '</button>' +
         '</div></td></tr>';
@@ -153,8 +155,13 @@ var CatalogoModule = (function () {
   }
 
   function guardar(id, m) {
+    // V3.5: validación inline (antes solo toast global)
+    App.formLimpiar(m.overlay);
     var nombre = document.getElementById('cat-form-elemento').value.trim();
-    if (!nombre) { App.toast('El nombre del elemento es obligatorio', 'aviso'); return; }
+    if (!nombre) {
+      App.formError(document.getElementById('cat-form-elemento'), 'El nombre del elemento es obligatorio.');
+      return;
+    }
     var datos = {
       elemento: nombre,
       tipo: document.getElementById('cat-form-tipo').value,
@@ -209,8 +216,11 @@ var CatalogoModule = (function () {
   return {
     init: function (contenedor) {
       cont = contenedor;
-      App.skeleton(cont, 5);
-      cargarTipos().then(function () { render(); });
+      // V3.5 (FIX BUG DE MONTAJE): cargar() nunca se invocaba en init — la
+      // página mostraba el empty state aunque hubiera elementos.
+      render();
+      cargar();
+      cargarTipos();
     }
   };
 })();

@@ -1000,6 +1000,81 @@ body.dc-mini .app-header { left: 68px; }
 @keyframes escalon-entrar { from { opacity: 0; transform: translateY(6px); } }
 @keyframes barra-crecer { from { transform: scaleY(0); } }
 
+/* ---------- 26.6 UTILITIES DE LAYOUT Y ESTADO (V3.5) ----------
+   Objetivo: eliminar los estilos inline repetidos de las páginas
+   (margenes, anchos, alineaciones, skeletons, requisitos, errores). */
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--esp-1); }
+.mt-2 { margin-top: var(--esp-2); }
+.mt-3 { margin-top: var(--esp-3); }
+.mt-4 { margin-top: var(--esp-4); }
+.mt-5 { margin-top: var(--esp-5); }
+.mb-2 { margin-bottom: var(--esp-2); }
+.mb-3 { margin-bottom: var(--esp-3); }
+.mb-4 { margin-bottom: var(--esp-4); }
+.ancho-auto { width: auto; }
+.ancho-total { width: 100%; }
+.texto-der { text-align: right; }
+.texto-centro { text-align: center; }
+.texto-cap { font-size: var(--t-caption); color: var(--texto-3); }
+
+/* Barra estándar de filtros/búsqueda de listas */
+.fila-filtros { display: flex; align-items: center; flex-wrap: wrap; gap: var(--esp-2) var(--esp-3); }
+.buscador-ancho { flex: 1; min-width: 200px; max-width: 340px; }
+.buscador-medio { flex: 1; min-width: 180px; max-width: 300px; }
+
+/* Skeletons con altura estandarizada (reemplaza height:56px/64px inline) */
+.skeleton-sm { height: 32px; }
+.skeleton-md { height: 56px; }
+.skeleton-lg { height: 64px; }
+
+/* Marcadores de requisitos (✓/✗/⚠) — color por clase, no inline */
+.req-ok { color: var(--dc-verde-600); font-weight: var(--peso-fuerte); }
+.req-aviso { color: var(--dc-ambar-600); font-weight: var(--peso-fuerte); }
+.req-peligro { color: var(--dc-rojo-600); font-weight: var(--peso-fuerte); }
+
+/* Errores inline de formulario */
+.campo-error .input, .campo-error .select, .campo-error .textarea {
+  border-color: var(--peligro);
+  box-shadow: 0 0 0 3px var(--peligro-claro);
+}
+.error-texto {
+  display: flex; align-items: center; gap: 5px;
+  font-size: var(--t-caption); color: var(--peligro);
+  margin-top: 4px; line-height: 1.35;
+}
+.error-texto .ico { width: 13px; height: 13px; }
+
+/* Campo obligatorio: asterisco rojo (icono + texto, nunca solo color) */
+.campo label .req { color: var(--peligro); font-weight: var(--peso-negrita); }
+
+/* Grid de checkboxes de asignación masiva (estandariza 19:210) */
+.grid-checks {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--esp-2); max-height: 260px; overflow-y: auto;
+  padding: var(--esp-2); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); background: var(--superficie-2);
+}
+.grid-checks label {
+  display: flex; align-items: center; gap: var(--esp-2);
+  font-size: var(--t-small); color: var(--texto-1);
+  padding: 5px 8px; border-radius: var(--radio-sm); cursor: pointer;
+}
+.grid-checks label:hover { background: var(--superficie); }
+.grid-checks input { width: 16px; height: 16px; accent-color: var(--primario); flex-shrink: 0; }
+
+/* Inputs compactos para tablas de edición (marcaje de asistencia) */
+.input-num { width: 70px; }
+.input-auto { width: auto; }
+.select-auto { width: auto; }
+
+/* Barra de tareas rápidas del Dashboard */
+.tarea-rapida { display: inline-flex; }
+@media (max-width: 768px) { .tarea-rapida { width: 100%; } }
+
+/* Estado de sesión en cabecera */
+.dot { flex-shrink: 0; }
+
 /* ---------- 27. ACCESIBILIDAD Y MOVIMIENTO ---------- */
 /* V3.4J: foco visible solo por teclado (focus-visible, nunca en clic) para
    navegación accesible sin contaminar el aspecto al hacer clic. */

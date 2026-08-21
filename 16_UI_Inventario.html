@@ -17,6 +17,15 @@ var InventarioModule = (function () {
   // se muestra explícitamente en lugar de perderse del resumen.
   var COLOR = { 'Disponible': '#2E7D4F', 'Entregado': '#004C90', 'Dañado': '#E20615', 'Extraviado': '#B80A19', 'Baja': '#64748B', 'Sin estado': '#9AA6B2' };
 
+  // V3.5: badge semántico por estado de inventario (icono+texto+color).
+  function estadoTipo(estado) {
+    if (estado === 'Disponible') return 'ok';
+    if (estado === 'Entregado') return 'info';
+    if (estado === 'Dañado' || estado === 'Extraviado') return 'peligro';
+    if (estado === 'Baja') return 'gris';
+    return 'neutro';
+  }
+
   function agrupar() {
     var q = consulta.trim().toLowerCase();
     var grupos = {};
@@ -50,10 +59,10 @@ var InventarioModule = (function () {
     var card = document.createElement('div');
     card.className = 'card';
     card.innerHTML =
-      '<div class="card-cabecera">' +
-      '<div class="buscador" style="flex:1;min-width:200px;max-width:340px">' + App.icono('buscar') +
+      '<div class="card-cabecera fila-filtros">' +
+      '<div class="buscador buscador-ancho">' + App.icono('buscar') +
       '<input class="input" id="inv-buscar" placeholder="Buscar por elemento, ID o serie…" aria-label="Buscar en inventario"></div>' +
-      '<select class="select" id="inv-filtro-estado" style="width:auto" aria-label="Filtrar por estado">' +
+      '<select class="select ancho-auto" id="inv-filtro-estado" aria-label="Filtrar por estado">' +
       '<option value="">Todos los estados</option>' +
       ESTADOS.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('') +
       '<option value="Sin estado">Sin estado</option></select>' +
@@ -100,17 +109,17 @@ var InventarioModule = (function () {
           App.h(es) + ' <span class="cant">' + totales[es] + '</span></span>';
       }).join('') || '<span class="texto-dim">Sin existencias</span>';
 
-      var tallas = {};
-      for (var t = 0; t < g.filas.length; t++) {
-        var talla = g.filas[t].talla || 'Sin talla';
-        if (!tallas[talla]) tallas[talla] = {};
-        tallas[talla][g.filas[t].estado] = (tallas[talla][g.filas[t].estado] || 0) + g.filas[t].cantidad;
-      }
-      var detalle = Object.keys(tallas).map(function (ta) {
-        var celdas = estadosVis.map(function (es) {
-          return '<td class="num">' + (tallas[ta][es] ? tallas[ta][es] : '—') + '</td>';
-        }).join('');
-        return '<tr><td class="fuerte">' + App.h(ta) + '</td>' + celdas + '</tr>';
+      // V3.5: filas por registro real (id/talla/estado/cantidad/serie) con
+      // botón de ajuste — antes la tabla agregaba por talla y el binding
+      // [data-ajustar] quedaba huérfano (ajustes inaccesibles desde la UI).
+      var detalle = g.filas.map(function (f) {
+        return '<tr>' +
+          '<td class="fuerte" data-label="Talla">' + App.h(f.talla || 'Sin talla') + '</td>' +
+          '<td data-label="Estado">' + App.badge(f.estado, estadoTipo(f.estado)) + '</td>' +
+          '<td class="num" data-label="Cantidad">' + f.cantidad + '</td>' +
+          '<td class="num" data-label="N° serie">' + App.h(f.serie || '—') + '</td>' +
+          '<td class="texto-der" data-label="Acciones"><button class="btn-icono" data-ajustar="' + App.h(f.id) + '" title="Ajustar ' + App.h(f.id) + '" aria-label="Ajustar ' + App.h(f.id) + '">' + App.icono('lupa') + '</button></td>' +
+          '</tr>';
       }).join('');
 
       html += '<div class="card" style="display:flex;flex-direction:column">' +
@@ -119,10 +128,10 @@ var InventarioModule = (function () {
         '<span class="badge badge-neutro">' + g.total + ' u.</span></div>' +
         '<div class="card-cuerpo" style="padding-top:var(--esp-2)">' +
         '<div class="fila" style="gap:6px">' + chips + '</div>' +
-        '<div id="detalle-' + App.h(g.id) + '"' + (abiertos[g.id] ? '' : ' hidden') + ' style="margin-top:var(--esp-3)">' +
-        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Talla</th><th>Disponible</th><th>Entregado</th><th>Dañado</th><th>Extraviado</th><th>Baja</th><th>Sin estado</th><th></th></tr></thead>' +
+        '<div id="detalle-' + App.h(g.id) + '"' + (abiertos[g.id] ? '' : ' hidden') + ' class="mt-3">' +
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Talla</th><th>Estado</th><th class="num">Cantidad</th><th class="num">N° serie</th><th class="texto-der">Acciones</th></tr></thead>' +
         '<tbody>' + detalle + '</tbody></table></div></div>' +
-        '<div class="fila" style="margin-top:var(--esp-3)">' +
+        '<div class="fila mt-3">' +
         '<button class="btn btn-ghost" data-detalle="' + App.h(g.id) + '" aria-expanded="' + (abiertos[g.id] ? 'true' : 'false') + '">' +
         (abiertos[g.id] ? App.icono('chevronD') : App.icono('chevronR')) + (abiertos[g.id] ? 'Ocultar detalle' : 'Ver detalle') + '</button>' +
         '</div></div></div>';
@@ -239,19 +248,24 @@ var InventarioModule = (function () {
 
   function cargar() {
     // V3.4K (0.1): caché compartida de inventario (trasCambio invalida todo).
+    var cuerpo = document.getElementById('inv-cuerpo');
+    if (cuerpo) App.skeleton(cuerpo, 6, true);
     App.memo('inventario', 30000, function () { return App.pedir('obtenerInventario'); }).then(function (res) {
       lista = res || [];
       renderLista();
     }).catch(function (err) {
-      var cuerpo = document.getElementById('inv-cuerpo');
-      if (cuerpo) cuerpo.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el inventario.</strong> ' + App.h(err.message || err));
+      var cuerpo2 = document.getElementById('inv-cuerpo');
+      if (cuerpo2) cuerpo2.innerHTML = App.alerta('critica', '<strong>No se pudo cargar el inventario.</strong> ' + App.h(err.message || err));
     });
   }
 
   return {
     init: function (contenedor) {
       cont = contenedor;
-      App.skeleton(cont, 6);
+      // V3.5 (FIX BUG DE MONTAJE): render() nunca se invocaba — #inv-cuerpo no
+      // existía y renderLista() hacía early-return en el primer cargador; la
+      // página quedaba vacía tras el skeleton.
+      render();
       cargar();
     }
   };

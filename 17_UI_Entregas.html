@@ -81,8 +81,7 @@ var EntregasModule = (function () {
 
   function navPaso(cuerpo, atras, adelanteHtml) {
     var fila = document.createElement('div');
-    fila.className = 'fila-entre';
-    fila.style.marginTop = 'var(--esp-4)';
+    fila.className = 'fila-entre mt-4';
     fila.innerHTML =
       '<button class="btn btn-secundario" id="ent-atras">' + App.icono('flechaIzq') + (atras || 'Atrás') + '</button>' +
       (adelanteHtml || '');
@@ -96,7 +95,7 @@ var EntregasModule = (function () {
   function renderPasoVoluntario(cuerpo) {
     cuerpo.innerHTML =
       '<h2 class="card-titulo" style="margin-bottom:12px">1 · ¿A quién se entrega?</h2>' +
-      '<div class="buscador" style="max-width:420px;margin-bottom:var(--esp-4)">' + App.icono('buscar') +
+      '<div class="buscador buscador-medio mb-4">' + App.icono('buscar') +
       '<input class="input" id="ent-buscar-vol" placeholder="Buscar por nombre, RUN o N°…" aria-label="Buscar voluntario"></div>' +
       '<div id="ent-lista-vol"></div>';
     var listaVol = document.getElementById('ent-lista-vol');
@@ -315,6 +314,9 @@ var EntregasModule = (function () {
       }]).then(function (r) {
         App.botonEstado(btn, 'exito', 'Registrada');
         App.toast('Entrega registrada correctamente', 'ok');
+        // V3.5 (FIX CACHÉ): el flujo individual no invalidaba la caché
+        // compartida (inventario/catálogo/dashboard) — stock quedaba obsoleto.
+        App.trasCambio();
         w.resultado = null;
         paso = 6;
         renderAsistente();
@@ -347,7 +349,7 @@ var EntregasModule = (function () {
     cuerpo.innerHTML =
       '<div class="alerta alerta-ok" role="status">' + App.icono('check') +
       '<div><strong>Entrega registrada correctamente</strong> — comprobante ' + App.h(r.id) + '. Puedes imprimirlo para la firma del voluntario y del responsable.</div></div>' +
-      '<div class="boleta" id="ent-boleta" style="margin-top:var(--esp-5)">' +
+      '<div class="boleta mt-5" id="ent-boleta">' +
       '<div class="boleta-cab">' +
       '<div class="boleta-izq">' +
       '<img class="boleta-logo logo-institucional" alt="Logo Defensa Civil de Chile">' +
@@ -420,15 +422,15 @@ var EntregasModule = (function () {
     cuerpo.innerHTML =
       '<h2 class="card-titulo" style="margin-bottom:4px">2 · Elementos a entregar</h2>' +
       '<p class="page-sub" style="margin-bottom:var(--esp-3)">Selecciona una o más líneas de stock. El <strong>tipo de entrega lo define el catálogo</strong> (badge por fila); el tipo general es solo una ayuda para filtrar.</p>' +
-      '<div id="ent-m-msj" style="margin-bottom:var(--esp-3)"></div>' +
-      '<div class="fila-entre" style="flex-wrap:wrap;gap:var(--esp-3);margin-bottom:var(--esp-3)">' +
-      '<div class="buscador" style="flex:1;min-width:190px">' + App.icono('buscar') +
+      '<div id="ent-m-msj" class="mb-3"></div>' +
+      '<div class="fila-entre mb-3" style="flex-wrap:wrap;gap:var(--esp-3)">' +
+      '<div class="buscador buscador-medio">' + App.icono('buscar') +
       '<input class="input" id="ent-m-buscar" placeholder="Buscar elemento…" aria-label="Buscar elemento"></div>' +
-      '<select class="input" id="ent-m-tipo" style="max-width:215px" aria-label="Tipo de entrega (filtro)">' +
+      '<select class="input select-auto" id="ent-m-tipo" aria-label="Tipo de entrega (filtro)">' +
       '<option value="Bajo cargo">Tipo: Bajo cargo (sin devolución)</option>' +
       '<option value="Requiere devolución">Tipo: Requiere devolución</option>' +
       '<option value="todos">Tipo: Todos</option></select>' +
-      '<select class="input" id="ent-m-disp" style="max-width:215px" aria-label="Disponibilidad (filtro)">' +
+      '<select class="input select-auto" id="ent-m-disp" aria-label="Disponibilidad (filtro)">' +
       '<option value="todos">Disponibilidad: Todas</option>' +
       '<option value="ok">Disponible</option>' +
       '<option value="bajo">Stock bajo</option>' +
@@ -680,7 +682,7 @@ var EntregasModule = (function () {
         App.h(errs.map(function (e) { return (e.elemento || e.inventarioId) + ' — ' + e.error; }).join(' · ')) + '</div></div>'
       : '';
     cuerpo.innerHTML = alertaOk + alertaErr +
-      '<div class="boleta" id="ent-boleta" style="margin-top:var(--esp-5)">' +
+      '<div class="boleta mt-5" id="ent-boleta">' +
       '<div class="boleta-cab">' +
       '<div class="boleta-izq">' +
       '<img class="boleta-logo logo-institucional" alt="Logo Defensa Civil de Chile">' +
@@ -745,20 +747,20 @@ var EntregasModule = (function () {
       return;
     }
     var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
-      '<th>ID</th><th>Fecha</th><th>Voluntario</th><th>Elemento</th><th>Talla</th><th>Cant.</th><th>Estado</th><th></th></tr></thead><tbody>';
+      '<th>ID</th><th>Fecha</th><th>Voluntario</th><th>Elemento</th><th>Talla</th><th>Cant.</th><th>Estado</th><th class="texto-der">Acciones</th></tr></thead><tbody>';
     for (var i = 0; i < historial.length; i++) {
       var e = historial[i];
       var cantTxt = e.cantidad + (e.cantidadDevuelta || e.cantidadDanada || e.cantidadExtraviada ?
         ' <span class="texto-dim">(dev ' + e.cantidadDevuelta + ' / dañ ' + e.cantidadDanada + ' / ext ' + e.cantidadExtraviada + ')</span>' : '');
       html += '<tr>' +
-        '<td class="fuerte num">' + App.h(e.id) + '</td>' +
-        '<td class="num">' + App.h(e.fechaEntrega || '—') + '</td>' +
-        '<td>' + App.h(e.voluntario) + '</td>' +
-        '<td>' + App.h(e.elemento) + '</td>' +
-        '<td>' + App.h(e.talla === 'Sin talla' ? '—' : e.talla) + '</td>' +
-        '<td class="num">' + cantTxt + '</td>' +
-        '<td>' + App.estadoEntrega(e.estado) + '</td>' +
-        '<td><div class="acciones">' +
+        '<td class="fuerte num" data-label="ID">' + App.h(e.id) + '</td>' +
+        '<td class="num" data-label="Fecha">' + App.h(e.fechaEntrega || '—') + '</td>' +
+        '<td data-label="Voluntario">' + App.h(e.voluntario) + '</td>' +
+        '<td data-label="Elemento">' + App.h(e.elemento) + '</td>' +
+        '<td data-label="Talla">' + App.h(e.talla === 'Sin talla' ? '—' : e.talla) + '</td>' +
+        '<td class="num" data-label="Cant.">' + cantTxt + '</td>' +
+        '<td data-label="Estado">' + App.estadoEntrega(e.estado) + '</td>' +
+        '<td data-label="Acciones"><div class="acciones">' +
         (e.estado === 'Pendiente de devolución' ?
           '<button class="btn-icono" data-devolver="' + App.h(e.id) + '" title="Registrar devolución" aria-label="Devolución de ' + App.h(e.id) + '">' + App.icono('devolver') + '</button>' : '') +
         '</div></td></tr>';

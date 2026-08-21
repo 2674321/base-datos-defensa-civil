@@ -43,16 +43,16 @@ var UnidadesModule = (function () {
       return;
     }
     var html = '<div class="tabla-wrap"><table class="tabla"><thead><tr>' +
-      '<th>Unidad</th><th>Estado</th><th>Jefe (Vol. N°)</th><th>Integrantes</th><th>Creación</th><th style="text-align:right">Acciones</th></tr></thead><tbody>';
+      '<th>Unidad</th><th>Estado</th><th>Jefe (Vol. N°)</th><th>Integrantes</th><th>Creación</th><th class="texto-der">Acciones</th></tr></thead><tbody>';
     for (var i = 0; i < lista.length; i++) {
       var u = lista[i];
       html += '<tr>' +
-        '<td class="fuerte">' + App.h(u.nombre) + (u.descripcion ? '<div class="texto-dim" style="font-weight:400">' + App.h(u.descripcion) + '</div>' : '') + '</td>' +
-        '<td>' + App.badge(u.estado, u.estado === 'Activa' ? 'ok' : (u.estado === 'En formación' ? 'aviso' : 'gris')) + '</td>' +
-        '<td class="num">' + App.h(u.jefeId || '—') + '</td>' +
-        '<td class="num">' + (u.integrantes || 0) + '</td>' +
-        '<td>' + App.h(u.fechaCreacion || '—') + '</td>' +
-        '<td><div class="acciones">' +
+        '<td class="fuerte" data-label="Unidad">' + App.h(u.nombre) + (u.descripcion ? '<div class="texto-dim" style="font-weight:400">' + App.h(u.descripcion) + '</div>' : '') + '</td>' +
+        '<td data-label="Estado">' + App.badge(u.estado, u.estado === 'Activa' ? 'ok' : (u.estado === 'En formación' ? 'aviso' : 'gris')) + '</td>' +
+        '<td class="num" data-label="Jefe (Vol. N°)">' + App.h(u.jefeId || '—') + '</td>' +
+        '<td class="num" data-label="Integrantes">' + (u.integrantes || 0) + '</td>' +
+        '<td data-label="Creación">' + App.h(u.fechaCreacion || '—') + '</td>' +
+        '<td data-label="Acciones"><div class="acciones">' +
         '<button class="btn-icono" data-un-edit="' + App.h(u.id) + '" title="Editar" aria-label="Editar unidad">' + App.icono('editar') + '</button>' +
         '<button class="btn-icono" data-un-det="' + App.h(u.id) + '" title="Integrantes" aria-label="Integrantes">' + App.icono('voluntarios') + '</button>' +
         '</div></td></tr>';
@@ -106,6 +106,9 @@ var UnidadesModule = (function () {
         App.pedir(esNuevo ? 'crearUnidadV2' : 'actualizarUnidadV2', esNuevo ? [datos] : [item.id, datos]).then(function () {
           m.cerrar();
           App.toast(esNuevo ? 'Unidad creada' : 'Unidad actualizada', 'ok');
+          // V3.5 (FIX CACHÉ): la caché compartida 'unidades' (tab Administrativo
+          // de la Ficha) no se invalidaba al guardar — datos obsoletos.
+          App.trasCambio();
           cargar();
         }).catch(function (err) {
           App.botonEstado(btn, 'normal');
@@ -121,7 +124,7 @@ var UnidadesModule = (function () {
       ancho: 'ancho',
       cuerpo: '<div class="alerta alerta-info" role="status">' + App.icono('alerta') +
         '<div><strong>' + App.h(item.nombre) + '</strong> — ' + App.h(item.estado) + ' · Jefe Vol. ' + App.h(item.jefeId || '—') + ' · ' + (item.integrantes || 0) + ' integrante(s) activo(s)</div></div>' +
-        '<div class="card" style="margin-top:var(--esp-3)"><div class="card-cabecera"><strong>Integrantes</strong>' +
+        '<div class="card mt-3"><div class="card-cabecera"><strong>Integrantes</strong>' +
         '<button class="btn btn-primario" id="un-asig-nuevo">' + App.icono('mas') + 'Asignar integrante</button></div>' +
         '<div class="card-cuerpo sin-pad" id="un-int-cuerpo"></div></div>',
       acciones: '<button class="btn btn-secundario" data-cerrar-form="1">Cerrar</button>'
