@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "Si utiliza este trabajo, por favor cítelo."
+title: "Base de Datos Defensa Civil: sistema integral de gestión de voluntarios, eventos, entregas e inventario"
+authors:
+  - family-names: Varela
+    given-names: Patricio
+    alias: CA2OPX
+    orcid: https://orcid.org/0009-0002-1087-9445
+version: "0.9.0"
+date-released: "2026-08-21"
+type: software
+keywords:
+  - "google-apps-script"
+  - "defensa-civil"
+  - "gestion"
+  - "voluntarios"
+  - "inventario"
+abstract: "Sistema de gestión sobre Google Apps Script para cuerpos de Defensa Civil: voluntarios, eventos, entregas, inventario, usuarios y permisos con UI web propia."
+repository-code: "https://github.com/2674321/base-datos-defensa-civil"
