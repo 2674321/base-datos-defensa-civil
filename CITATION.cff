@@ -9,6 +9,7 @@ authors:
 version: "0.9.0"
 date-released: "2026-08-21"
 type: software
+license: MIT
 keywords:
   - "google-apps-script"
   - "defensa-civil"
