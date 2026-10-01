@@ -1,31 +1,45 @@
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Environment
+# Apps Script / credenciales
+.clasp.json
+.clasprc.json
 .env
-.env.local
+.env.*
+*.credentials.json
+*.token.json
+credentials.json
+token.json
+
+# Datos operativos reales / exportaciones
+/backups/
+/exports/
+/data/real/
+/data/private/
+*.xlsx
+*.xls
+*.ods
+*.csv
+*.tsv
 
 # Node
 node_modules/
+coverage/
+dist/
+build/
 
-# Editor
+# Editor / sistema
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Logs
+# Logs / temporales
 *.log
-
-# Clasp credentials (sensitive)
-.clasp.json
-
-# Temporary
 /tmp/
 *.tmp
+*.bak
 
 # Reference material (scraped official site — not part of the project, see AGENTS.md)
 /Defensa Civil – Al servicio de la ciudadaní.html
