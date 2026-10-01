@@ -1,5 +1,7 @@
 # Base de Datos — Defensa Civil
 
+**Autor:** [Patricio Varela C.](https://github.com/2674321) · **ORCID:** [0009-0002-1087-9445](https://orcid.org/0009-0002-1087-9445) · **Licencia:** [MIT](LICENSE) · **Citación:** [CITATION.cff](CITATION.cff)
+
 [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](LICENSE) ![Versión](https://img.shields.io/badge/versi%C3%B3n-v0.9.0-green) ![Estado](https://img.shields.io/badge/estado-en%20desarrollo-yellow) [![CI](https://github.com/2674321/base-datos-defensa-civil/actions/workflows/ci.yml/badge.svg)](https://github.com/2674321/base-datos-defensa-civil/actions/workflows/ci.yml)
 
 
