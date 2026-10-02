@@ -3,11 +3,38 @@
  * Acceso a la hoja, RUT, fechas, normalización de texto, logging y config con caché.
  */
 
+// Clave de Script Property donde se guarda el ID de la hoja de producción.
+var CLAVE_SS_ID = 'SS_ID';
+
+// Resuelve el ID de la hoja desde Script Properties (no versionado).
+// Lanza un error claro si el despliegue no lo ha configurado.
+function getSpreadsheetId_() {
+  var id = '';
+  try {
+    id = String(
+      PropertiesService.getScriptProperties().getProperty(CLAVE_SS_ID) || ''
+    ).trim();
+  } catch (e) {
+    id = '';
+  }
+  if (!id) {
+    throw new Error(
+      "Falta la Script Property '" +
+        CLAVE_SS_ID +
+        "'. Configúrala en Configuración del proyecto > Propiedades de la secuencia " +
+        "de comandos, o con: PropertiesService.getScriptProperties().setProperty('" +
+        CLAVE_SS_ID +
+        "', '<ID_HOJA>'). Ver docs/CONFIGURACION_CLASP.md."
+    );
+  }
+  return id;
+}
+
 function _ss() {
   try {
     return SpreadsheetApp.getActiveSpreadsheet();
   } catch (e) {
-    return SpreadsheetApp.openById(SS_ID);
+    return SpreadsheetApp.openById(getSpreadsheetId_());
   }
 }
 

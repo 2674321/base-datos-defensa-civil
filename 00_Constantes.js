@@ -9,7 +9,25 @@ var PROYECTO = {
   version: '0.9.0 — V3.5'
 };
 
-var SS_ID = 'SS_ID_REDACTED';
+// El identificador de la hoja de producción ya NO se versiona aquí.
+// Se resuelve en runtime con getSpreadsheetId_() (01_Utilidades.js) desde
+// PropertiesService.getScriptProperties().getProperty('SS_ID').
+// Configuración: ver docs/CONFIGURACION_CLASP.md.
+
+// V3.5: barrera de seguridad — el seed DEMO solo puede ejecutarse con este
+// interruptor en true (entornos de desarrollo/validación). En producción debe
+// permanecer en false para impedir la siembra de datos de prueba.
+var PERMITIR_DATOS_DEMO = false;
+
+// V3.5: Forms de ingreso de datos reales.
+//  - FORM_CONTACTOS_ID: "Datos de Contacto" — FormApp.openById() lo resuelve.
+//  - FORM_PERSONAL_ID: Form 2 (personal). Solo se conoce su URL pública;
+//    el ID editable se resuelve en `analizarFormsV35()` vía DriveApp por
+//    título (idente si el proyecto aún no tiene acceso al formulario).
+var FORM_CONTACTOS_ID = '1D3M1SKDwDCNeJFRtqOoAYs8KXvtAhhx0qAKnCW-i_X0';
+var FORM_CONTACTOS_NOMBRE = 'Datos de Contacto';
+var FORM_PERSONAL_ID = '';
+var FORM_PERSONAL_NOMBRE = 'Personal';
 
 var HOJA = {
   voluntarios: 'Voluntarios',
