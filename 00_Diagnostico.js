@@ -1,5 +1,5 @@
 function describeSpreadsheet() {
-  var ss = SpreadsheetApp.openById('SS_ID_REDACTED');
+  var ss = SpreadsheetApp.openById(getSpreadsheetId_());
   var out = {
     title: ss.getName(),
     timezone: Session.getScriptTimeZone(),

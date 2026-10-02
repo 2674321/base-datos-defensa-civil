@@ -14,7 +14,7 @@
 | **URL producción** | `https://script.google.com/macros/s/AKfycbxVlTwraU3tClaeLakRkXW3fwmi99-9ZqRtqgvwwEOhQqha9kSTnLxyjRpqZofh6DoO/exec` (acceso MYSELF — solo cuenta dueña) |
 | **URL desarrollo** | `https://script.google.com/macros/s/AKfycbztcY89kv8DJJeg3WI0hSn2ZCPbF8225g7a6XB3gDI/dev` (deployment @HEAD) |
 | **Script ID** | `1mV5zmWLJFF13_pDjFaHjMcuRMzfvR6AelT7Xl2Oa06eaLpuA0fGFZc2l` |
-| **Spreadsheet** | `SS_ID_REDACTED` — "Proyecto Base de datos D.C 'La serena'" |
+| **Spreadsheet** | `<SS_ID>` — "Proyecto Base de datos D.C 'La serena'" |
 | **Git** | 26 commits; HEAD `fdcb3a3` (V3.4L); árbol limpio |
 | **Regla de deploy** | NO crear deployments paralelos — siempre `clasp deploy -i AKfycbxVlTwraU3tClaeLakRkXW3fwmi99-9ZqRtqgvwwEOhQqha9kSTnLxyjRpqZofh6DoO` (mantiene la URL) |
 
